@@ -1,36 +1,100 @@
-import React, { useState } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { COLORS } from '../theme';
-import { WIPIcon } from '../components/WIPIcon';
+import { UserContext } from '../components/MyContexts';
+
+// Firebase imports
+import { getAuth, createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { auth, db } from "../lib/firebase";
+import { setDoc, doc } from "firebase/firestore";
 
 export default function RegisterScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(false);
-  const [userName, setUserName] = useState('');
+  const {user, setUser} = useContext(UserContext);
+  const [userDisplayName, setUserDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
 
-  
+  // Effect to reset input fields
+      useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+          setUserDisplayName('');
+          setUser(null);
+          setEmail('');
+          setPassword('');
+        })
+        return () => unsubscribe;
+      }, [navigation]);
+
+    //Effect to switch to Main App
+    useEffect(() => {
+      if (user !== null) {
+        console.log('Logged in with:', user.uid);
+        console.log('Logged in with privilege:', user.privilege);
+        navigation.navigate('Main', {
+
+        });
+      }
+      console.log('Login first Register run');
+    }, [user]);
+
+  //Signup functions  
   const validate = () => {
     let sErrors = {};
     if (!email.includes('@')) sErrors.email = "Invalid email address";
     if (password.length < 6) sErrors.password = "Password must be at least 6 characters";
     
     setErrors(sErrors);
+    console.log("Validation Errors:", sErrors);
     return Object.keys(sErrors).length === 0;
   };
 
-  const handleRegister = () => {    
+  const handleRegister = () => {
     if (!validate()) return;
 
+    // 1. Trigger the loading state
     setIsLoading(true);
-  
-    // Simulate registration delay
-    setTimeout(() => {
+    createUserWithEmailAndPassword(auth, email, password)
+    .then(userCredentials => {
+      //Success
+      console.log('user created');
+      let currentUser = auth.currentUser;
+      updateProfile(currentUser, {displayName: userDisplayName, photoURL: 'https://imgur.com/EwXaZ49'})
+        .then(() => {
+          //Success
+          console.log('profile updated', userDisplayName);
+          let userData = {              
+            privilege: 1,
+            userEmail: currentUser.email,
+            uid: currentUser.uid,
+            userDisplayName: userDisplayName,
+            userPhoto: 'https://imgur.com/EwXaZ49'
+          };
+
+          setDoc(doc(db, 'users', currentUser.uid), userData)
+            .then(doc => {
+              //Success
+              console.log('userDoc created', userData.userDisplayName);
+              setUser(userData);
+              setIsLoading(false);
+            }).catch((errorSetDoc) => {
+              // An error occurred
+              console.log('SetDoc error', errorSetDoc);
+              alert(errorSetDoc.message)});
+        
+      }).catch((errorUpdate) => {
+        // An error occurred
+        console.log('errorUpdate', errorUpdate);
+        alert(errorUpdate.message);
+      });
+    }).catch((errorCreate) => {
+      // An error occurred
       setIsLoading(false);
-      alert("Account Created!");
-      navigation.navigate('Main');
-    }, 2000);
+      console.log('errorCreate', errorCreate);
+      alert(errorCreate.message);
+    });
+    
   };
 
   return (
@@ -38,15 +102,15 @@ export default function RegisterScreen({ navigation }) {
       <Text style={styles.title}>Join Side-Kick</Text>
       
       <TextInput style={styles.input} 
-      placeholder="Full Name" 
-      onChangeText={(txt) => setUserName(txt)}
+      placeholder="Full Name / Display Name"
+      onChangeText={(userName) => setUserDisplayName(userName)}
       />
 
       <TextInput 
         style={[styles.input, errors.email && styles.inputError]} 
         placeholder="Email"
         keyboardType="email-address"
-        onChangeText={(txt) => {setEmail(txt); setErrors({})}}
+        onChangeText={(email) => {setEmail(email); setErrors({})}}
       />
       {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
 
@@ -54,7 +118,7 @@ export default function RegisterScreen({ navigation }) {
         style={[styles.input, errors.password && styles.inputError]} 
         placeholder="Password" 
         secureTextEntry 
-        onChangeText={(txt) => {setPassword(txt); setErrors({})}}
+        onChangeText={(password) => {setPassword(password); setErrors({})}}
       />
       {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
 
