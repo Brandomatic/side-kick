@@ -4,7 +4,7 @@ import { COLORS } from '../theme';
 import { UserContext } from '../components/MyContexts';
 
 // Firebase imports
-import { getAuth, createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { setDoc, doc } from "firebase/firestore";
 
@@ -14,88 +14,94 @@ export default function RegisterScreen({ navigation }) {
   const [userDisplayName, setUserDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState({});
 
   // Effect to reset input fields
       useEffect(() => {
         const unsubscribe = navigation.addListener('focus', () => {
           setUserDisplayName('');
-          setUser(null);
           setEmail('');
           setPassword('');
+          setConfirmPassword('');
+          setErrors({});
         })
         return () => unsubscribe;
       }, [navigation]);
 
-    //Effect to switch to Main App
-    useEffect(() => {
-      if (user !== null) {
-        console.log('Logged in with:', user.uid);
-        console.log('Logged in with privilege:', user.privilege);
-        navigation.navigate('Main', {
-
-        });
-      }
-      console.log('Login first Register run');
-    }, [user]);
+  //Effect to switch to internal app navigation
+  useEffect(() => {
+    if (user !== null) {
+      setIsLoading(false);
+      navigation.reset({
+      index: 0,
+      routes: [{ name: 'Main' }],
+    });
+      console.log('Logged in with:', user.uid);
+      console.log('Logged in with privilege:', user.privilege);
+    };
+  }, [user]);
 
   //Signup functions  
   const validate = () => {
     let sErrors = {};
-    if (!email.includes('@')) sErrors.email = "Invalid email address";
-    if (password.length < 6) sErrors.password = "Password must be at least 6 characters";
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (!cleanEmail.includes('@')) sErrors.email = "Invalid email address";
     
+    // Password checks
+    if (password.length < 6) {
+      sErrors.password = "Password must be at least 6 characters";
+    } else if (!/\d/.test(password)) {
+      // Check if it contains at least one number
+      sErrors.password = "Password needs at least one number";
+    } else if (password === "123456" || password === "password") {
+      sErrors.password = "This password is too common!";
+    } else if (password !== confirmPassword) {
+      sErrors.confirmPassword = "Passwords do not match!";
+    }
+
     setErrors(sErrors);
-    console.log("Validation Errors:", sErrors);
     return Object.keys(sErrors).length === 0;
   };
 
-  const handleRegister = () => {
-    if (!validate()) return;
+  const handleRegister = async () => {
+  if (!validate()) return;
 
-    // 1. Trigger the loading state
-    setIsLoading(true);
-    createUserWithEmailAndPassword(auth, email, password)
-    .then(userCredentials => {
-      //Success
-      console.log('user created');
-      let currentUser = auth.currentUser;
-      updateProfile(currentUser, {displayName: userDisplayName, photoURL: 'https://imgur.com/EwXaZ49'})
-        .then(() => {
-          //Success
-          console.log('profile updated', userDisplayName);
-          let userData = {              
-            privilege: 1,
-            userEmail: currentUser.email,
-            uid: currentUser.uid,
-            userDisplayName: userDisplayName,
-            userPhoto: 'https://imgur.com/EwXaZ49'
-          };
+  const cleanEmail = email.trim().toLowerCase();
+  setIsLoading(true);
 
-          setDoc(doc(db, 'users', currentUser.uid), userData)
-            .then(doc => {
-              //Success
-              console.log('userDoc created', userData.userDisplayName);
-              setUser(userData);
-              setIsLoading(false);
-            }).catch((errorSetDoc) => {
-              // An error occurred
-              console.log('SetDoc error', errorSetDoc);
-              alert(errorSetDoc.message)});
-        
-      }).catch((errorUpdate) => {
-        // An error occurred
-        console.log('errorUpdate', errorUpdate);
-        alert(errorUpdate.message);
-      });
-    }).catch((errorCreate) => {
-      // An error occurred
-      setIsLoading(false);
-      console.log('errorCreate', errorCreate);
-      alert(errorCreate.message);
-    });
+  try {
+    // 1. Create the Auth User
+    const userCredentials = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+    const currentUser = userCredentials.user;
+    console.log('User created:', currentUser.uid);
+
+    const userData = {              
+      privilege: 1,
+      userEmail: cleanEmail, // use local state for speed
+      uid: currentUser.uid,
+      userDisplayName: userDisplayName,
+      userPhoto: "default"
+    };
+
+    await setDoc(doc(db, 'users', currentUser.uid), userData);
+    console.log('User data saved to Firestore:', userData);
     
-  };
+    // 3. Finalize
+    setUser(userData);
+    
+  } catch (error) {
+    setIsLoading(false);
+    console.error('Registration Error:', error.code);
+    
+    // Custom error messages for users
+    if (error.code === 'auth/email-already-in-use') {
+      alert("That email is already registered!");
+    } else {
+      alert(error.message);
+    }
+  }};
 
   return (
     <View style={styles.container}>
@@ -103,6 +109,7 @@ export default function RegisterScreen({ navigation }) {
       
       <TextInput style={styles.input} 
       placeholder="Full Name / Display Name"
+      returnKeyType="next"
       onChangeText={(userName) => setUserDisplayName(userName)}
       />
 
@@ -110,29 +117,49 @@ export default function RegisterScreen({ navigation }) {
         style={[styles.input, errors.email && styles.inputError]} 
         placeholder="Email"
         keyboardType="email-address"
+        returnKeyType="next"
         onChangeText={(email) => {setEmail(email); setErrors({})}}
       />
       {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
 
       <TextInput 
-        style={[styles.input, errors.password && styles.inputError]} 
+        style={[styles.input, errors.password && styles.inputError]}
         placeholder="Password" 
-        secureTextEntry 
+        secureTextEntry
+        autoCapitalize="none"
+        returnKeyType="next"
         onChangeText={(password) => {setPassword(password); setErrors({})}}
       />
       {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
 
-            <TouchableOpacity 
-              style={[styles.button, isLoading && { opacity: 0.7 }]} // Dim button when loading
-              onPress={handleRegister}
-              disabled={isLoading} // Prevent double taps
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" /> 
-              ) : (
-                <Text style={styles.buttonText}>Register</Text>
-              )}
-            </TouchableOpacity>
+      <TextInput 
+        style={[styles.input, errors.confirmPassword && styles.inputError]}
+        placeholder="Confirm Password" 
+        secureTextEntry
+        autoCapitalize="none" 
+        returnKeyType="done"
+        onChangeText={(passwordConfirm) => {setConfirmPassword(passwordConfirm); setErrors({})}}
+      />
+      {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
+
+      <TouchableOpacity 
+        style={[
+          styles.button, 
+          // This adds 70% opacity when loading
+          isLoading && { opacity: 0.7 },
+          // This adds 50% opacity if fields are empty (Optional but nice)
+          (!email || !password) && { opacity: 0.5 } 
+          ]} 
+          onPress={handleRegister}
+          // Prevent clicking while loading or empty
+          disabled={isLoading || !email || !password}>
+          {/* Show loading spinner when isLoading is true, otherwise show "Register" text */}
+          {isLoading ? (
+            <ActivityIndicator color="#FFFFFF" /> 
+          ) : (
+            <Text style={styles.buttonText}>Register</Text>
+          )}
+        </TouchableOpacity>
 
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.link}>
         <Text style={styles.linkText}>Already have an account? Log In</Text>

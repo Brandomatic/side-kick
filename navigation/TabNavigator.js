@@ -4,8 +4,8 @@ import { Ionicons } from '@expo/vector-icons'; // Import icons
 import { COLORS } from '../theme';
 
 // Screens
-import HomeScreen from '../screens/HomeScreen';
-import InfoScreen from '../screens/InfoScreen';
+import DashboardScreen from '../screens/DashboardScreen';
+import EquipmentScreen from '../screens/EquipmentScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -38,20 +38,20 @@ export default function TabNavigator() {
       })}
     >
       <Tab.Screen 
-        name="Home" 
-        component={HomeScreen} 
+        name="Dashboard"
+        component={DashboardScreen} 
         options={{
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
+            <Ionicons name="grid" size={size} color={color} />
           ),
         }}
       />
       <Tab.Screen 
-        name="Information" 
-        component={InfoScreen} 
+        name="Equipment" 
+        component={EquipmentScreen} 
         options={{
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="information-circle" size={size} color={color} />
+            <Ionicons name="construct" size={size} color={color} />
           ),
         }}
       />

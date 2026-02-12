@@ -16,13 +16,11 @@ export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const {user, setUser} = useContext(UserContext);
-  const [userData, setUserData] = useState(null);
   const [errors, setErrors] = useState({});
 
   // Effect to reset input fields
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      setUser(null);
       setEmail('');
       setPassword('');
     })
@@ -32,49 +30,57 @@ export default function LoginScreen({ navigation }) {
   //Effect to switch to internal app navigation
   useEffect(() => {
     if (user !== null) {
+      setIsLoading(false);
+      navigation.reset({
+      index: 0,
+      routes: [{ name: 'MainTabs' }],
+    });
       console.log('Logged in with:', user.uid);
       console.log('Logged in with privilege:', user.privilege);
-      setIsLoading(false);
-      navigation.navigate('Main', {
-
-      });
-    } else if (userData !== null) {
-      console.log('Setting user from userData:', userData);
-      setUser(userData); 
-    }
-    setIsLoading(false);
-  }, [user, userData]);
+    };
+  }, [user]);
 
   // SIGN IN FUNCTIONS
   const validate = () => {
     let sErrors = {};
-    if (!email.includes('@')) sErrors.email = "Invalid email address";
-    if (password.length < 6) sErrors.password = "Password must be at least 6 characters";
+
+    // Check if the email exists and is in a valid format
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail.includes('@')) sErrors.email = "Invalid email address";
+
+    // Check if the password exists and isn't just whitespace
+    if (!password || password.trim().length === 0) {
+      sErrors.password = "Password is required";
+    }
     
     setErrors(sErrors);
     console.log("Validation Errors:", sErrors);
     return Object.keys(sErrors).length === 0;
   };
 
-  const getUserData = () => {
-    let currentUser = auth.currentUser;
-    let docRef = doc(db, 'users', currentUser.uid);
-    getDoc(docRef)
-    .then((doc) => {
-      let docData = doc.data();
-      let tempUserData = {
-        privilege: docData.privilege,
-        userEmail: docData.userEmail,
-        uid: docData.uid,
-        userDisplayName: docData.userDisplayName,
-        userPhoto: docData.userPhoto,
+  const getUserData = async (uid) => {
+    try {
+      const docRef = doc(db, 'users', uid);
+      const userDoc = await getDoc(docRef);
+      
+      if (userDoc.exists()) {
+        const docData = userDoc.data();
+        const tempUserData = {
+          privilege: docData.privilege,
+          userEmail: docData.userEmail,
+          uid: docData.uid,
+          userDisplayName: docData.userDisplayName,
+          userPhoto: docData.userPhoto,
+        };
+        setUser(tempUserData); // Set global context directly
+      } else {
+        console.log("No such document in Firestore!");
       }
-      setUserData(tempUserData);
-    }).catch((errorGetDoc) => {
-      console.log('in getDoc error');
-      alert(errorGetDoc.message);        
-    });
-    
+    } catch (error) {
+      alert("Error fetching profile: " + error.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleLogin = () => {
@@ -85,12 +91,29 @@ export default function LoginScreen({ navigation }) {
     //Firebase signin function
     signInWithEmailAndPassword(auth, email, password)
       .then(userCredentials => {
-        getUserData();
+        getUserData(userCredentials.user.uid);
       })
       .catch(errorSignIn => {
         setIsLoading(false);
-        console.log('in signIn error')
-        alert(errorSignIn.message)
+        console.log('Login Error Code:', errorSignIn.code);
+
+        let userFriendlyMessage = "An unexpected error occurred. Please try again.";
+
+        // Group common credential errors for security
+        if (
+          errorSignIn.code === 'auth/user-not-found' || 
+          errorSignIn.code === 'auth/wrong-password' || 
+          errorSignIn.code === 'auth/invalid-credential' ||
+          errorSignIn.code === 'auth/invalid-email'
+        ) {
+          userFriendlyMessage = "Invalid email or password. Please check your credentials.";
+        } else if (errorSignIn.code === 'auth/too-many-requests') {
+          userFriendlyMessage = "Too many failed attempts. Please try again later.";
+        } else if (errorSignIn.code === 'auth/network-request-failed') {
+          userFriendlyMessage = "Network error. Please check your internet connection.";
+        }
+
+        Alert.alert("Login Failed", userFriendlyMessage);
       });
   };
 
@@ -105,23 +128,33 @@ export default function LoginScreen({ navigation }) {
         style={[styles.input, errors.email && styles.inputError]} 
         placeholder="Email"
         keyboardType="email-address"
-        onChangeText={(txt) => {setEmail(txt); setErrors({})}}
+        returnKeyType="next"
+        onChangeText={(email) => {setEmail(email); setErrors({})}}
       />
       {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
 
       <TextInput 
         style={[styles.input, errors.password && styles.inputError]} 
         placeholder="Password" 
-        secureTextEntry 
+        secureTextEntry
+        autoCapitalize="none"
+        returnKeyType="done"
         onChangeText={(txt) => {setPassword(txt); setErrors({})}}
       />
       {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
 
       <TouchableOpacity 
-        style={[styles.button, isLoading && { opacity: 0.7 }]} // Dim button when loading
+      style={[
+        styles.button, 
+        // This adds 70% opacity when loading
+        isLoading && { opacity: 0.7 },
+        // This adds 50% opacity if fields are empty (Optional but nice)
+        (!email || !password) && { opacity: 0.5 } 
+        ]} 
         onPress={handleLogin}
-        disabled={isLoading} // Prevent double taps
-      >
+        // Prevent clicking while loading or empty
+        disabled={isLoading || !email || !password}>
+        {/* Show loading spinner when isLoading is true, otherwise show "Log In" text */}
         {isLoading ? (
           <ActivityIndicator color="#FFFFFF" /> 
         ) : (
