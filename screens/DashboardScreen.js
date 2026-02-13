@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { moderateScale, SCREEN_WIDTH } from '../utils/metrics';
 import { COLORS } from '../theme';
@@ -12,56 +13,66 @@ const RECENT_EQUIPMENT = [
 ];
 
 export default function DashboardScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      
-      {/* SECTION: Action Buttons */}
-      <View style={styles.actionGrid}>
-        <TouchableOpacity style={styles.mainActionCard}>
-          <Ionicons name="qr-code-outline" size={moderateScale(40)} color={COLORS.primary} />
-          <Text style={styles.actionText}>Scan QR Code</Text>
-        </TouchableOpacity>
+    <View style={[
+      styles.container, 
+      { paddingBottom: insets.bottom } // Dynamic padding
+    ]}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        
+        {/* SECTION: Action Buttons */}
+        <View style={styles.actionGrid}>
+          <TouchableOpacity 
+            style={styles.mainActionCard}
+            onPress={() => navigation.navigate('QRScanner')}
+            >
+            <Ionicons name="qr-code-outline" size={moderateScale(40)} color={COLORS.primary} />
+            <Text style={styles.actionText}>Scan QR Code</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.mainActionCard}>
-          <Ionicons name="mic-outline" size={moderateScale(40)} color={COLORS.primary} />
-          <Text style={styles.actionText}>Voice Log</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* SECTION: Quick Stats */}
-      <View style={styles.statsRow}>
-        <View style={styles.statBox}>
-          <Text style={styles.statNumber}>12</Text>
-          <Text style={styles.statLabel}>Pending</Text>
+          <TouchableOpacity style={styles.mainActionCard}>
+            <Ionicons name="mic-outline" size={moderateScale(40)} color={COLORS.primary} />
+            <Text style={styles.actionText}>Voice Log</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.statBox}>
-          <Text style={[styles.statNumber, { color: '#4CAF50' }]}>85%</Text>
-          <Text style={styles.statLabel}>Fleet Health</Text>
+
+        {/* SECTION: Quick Stats */}
+        <View style={styles.statsRow}>
+          <View style={styles.statBox}>
+            <Text style={styles.statNumber}>12</Text>
+            <Text style={styles.statLabel}>Pending</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={[styles.statNumber, { color: '#4CAF50' }]}>85%</Text>
+            <Text style={styles.statLabel}>Fleet Health</Text>
+          </View>
         </View>
-      </View>
 
-      {/* SECTION: Recent Inspections */}
-      <Text style={styles.sectionHeader}>Recent Activity</Text>
-      {RECENT_EQUIPMENT.map((item) => (
-        <TouchableOpacity key={item.id} 
-        style={styles.recentCard}
-        onPress={() => navigation.navigate('EquipmentDetail', { unitId: item.id })}
-        >
-          <View style={styles.cardInfo}>
-            <Text style={styles.unitName}>{item.name}</Text>
-            <Text style={styles.unitLocation}>{item.location} • {item.time}</Text>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: item.status === 'Clear' ? '#E8F5E9' : '#FFEBEE' }]}>
-            <Text style={{ color: item.status === 'Clear' ? '#2E7D32' : '#C62828', fontSize: 12, fontWeight: 'bold' }}>
-              {item.status.toUpperCase()}
-            </Text>
-          </View>
-        </TouchableOpacity>
-      ))}
+        {/* SECTION: Recent Inspections */}
+        <Text style={styles.sectionHeader}>Recent Activity</Text>
+        {RECENT_EQUIPMENT.map((item) => (
+          <TouchableOpacity key={item.id} 
+          style={styles.recentCard}
+          onPress={() => navigation.navigate('EquipmentDetail', { unitId: item.id })}
+          >
+            <View style={styles.cardInfo}>
+              <Text style={styles.unitName}>{item.name}</Text>
+              <Text style={styles.unitLocation}>{item.location} • {item.time}</Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: item.status === 'Clear' ? '#E8F5E9' : '#FFEBEE' }]}>
+              <Text style={{ color: item.status === 'Clear' ? '#2E7D32' : '#C62828', fontSize: 12, fontWeight: 'bold' }}>
+                {item.status.toUpperCase()}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ))}
 
-      {/* Spacing for floating tab bar */}
-      <View style={{ height: 100 }} />
-    </ScrollView>
+        {/* Spacing for floating tab bar */}
+        <View style={{ height: 100 }} />
+      </ScrollView>
+    </View>
   );
 }
 

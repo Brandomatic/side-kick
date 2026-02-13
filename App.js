@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SplashScreen from 'expo-splash-screen';
@@ -13,6 +14,7 @@ import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import EquipmentDetailScreen from './screens/EquipmentDetailScreen';
+import QRScannerScreen from './screens/QRScannerScreen';
 
 //env setup
 import { Config } from './config';
@@ -51,56 +53,69 @@ export default function App() {
   if (!appIsReady) return null;
 
   return (
-    <UserContext.Provider value={userProvider}>
-      <NavigationContainer onReady={onLayoutRootView}>
-        <Stack.Navigator
-          screenOptions={{ 
-            headerShown: false,
-            animation: 'fade'
-          }}
-        >
-          {user ? (
-            // APP SECTION
-            <Stack.Group>
-              <Stack.Screen 
-                name="MainTabs" 
-                component={TabNavigator} 
-                options={({ navigation }) => ({
-                  headerShown: true, // Turn header on for the main app
-                  header: () => <AppHeader title="Side-Kick" navigation={navigation} />
-                })}
-              />
-              
-              {/* Profile Screen is a SIBLING to the Tabs, so it hides them when open */}
-              <Stack.Screen 
-                name="Profile" 
-                component={ProfileScreen} 
-                options={{ 
-                  headerShown: true,
-                  animation: 'slide_from_right', // Feels like a sub-menu
-                  title: 'My Account' 
-                }} 
-              />
+    <SafeAreaProvider>
+      <UserContext.Provider value={userProvider}>
+        <NavigationContainer onReady={onLayoutRootView}>
+          <Stack.Navigator
+            screenOptions={{ 
+              headerShown: false,
+              animation: 'fade'
+            }}
+          >
+            {user ? (
+              // APP SECTION
+              <Stack.Group>
+                <Stack.Screen 
+                  name="MainTabs" 
+                  component={TabNavigator} 
+                  options={({ navigation }) => ({
+                    headerShown: true, // Turn header on for the main app
+                    header: () => <AppHeader title="Side-Kick" navigation={navigation} />
+                  })}
+                />
+                
+                {/* Profile Screen is a SIBLING to the Tabs, so it hides them when open */}
+                <Stack.Screen 
+                  name="Profile" 
+                  component={ProfileScreen} 
+                  options={{ 
+                    headerShown: true,
+                    animation: 'slide_from_right', // Feels like a sub-menu
+                    title: 'My Account' 
+                  }} 
+                />
 
-              <Stack.Screen 
-                name="EquipmentDetail" 
-                component={EquipmentDetailScreen} 
-                options={({ route }) => ({ 
-                  headerShown: true,
-                  title: route.params?.unitId ? `Unit ${route.params.unitId}` : 'Details',
-                  animation: 'slide_from_right'
-                })} 
-              />
-            </Stack.Group>
-          ) : (
-            // AUTH SECTION
-            <Stack.Group screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="Login" component={LoginScreen} />
-              <Stack.Screen name="Register" component={RegisterScreen} />
-            </Stack.Group>
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
-    </UserContext.Provider>
+                <Stack.Screen 
+                  name="EquipmentDetail" 
+                  component={EquipmentDetailScreen} 
+                  options={({ route }) => ({ 
+                    headerShown: true,
+                    title: route.params?.unitId ? `Unit ${route.params.unitId}` : 'Details',
+                    animation: 'slide_from_right'
+                  })} 
+                />
+
+                <Stack.Screen 
+                  name="QRScanner" 
+                  component={QRScannerScreen} 
+                  options={({ route }) => ({ 
+                    headerShown: false,
+                    animation: 'fade',
+                    orientation: 'portrait', // Keeps the UI stable during awkward scan angles
+                    presentation: 'fullScreenModal', // Prevents accidental "swipe-to-close" on iOS                  
+                  })} 
+                />
+              </Stack.Group>
+            ) : (
+              // AUTH SECTION
+              <Stack.Group screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="Login" component={LoginScreen} />
+                <Stack.Screen name="Register" component={RegisterScreen} />
+              </Stack.Group>
+            )}
+          </Stack.Navigator>
+        </NavigationContainer>
+      </UserContext.Provider>
+    </SafeAreaProvider>
   );
 }
