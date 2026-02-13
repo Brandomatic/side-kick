@@ -71,7 +71,10 @@ export default function EquipmentDetailScreen({ route, navigation }) {
       {/* FLOATING ACTION BUTTON: Start Inspection */}
       <TouchableOpacity 
         style={styles.fab}
-        onPress={() => alert('Opening Checklist...')}
+        onPress={() => navigation.navigate('InspectionForm', { 
+          unitId: unitId, // Pass the crane ID
+          type: 'Crane'   // Tell the form which checklist to load
+        })}
       >
         <Ionicons name="clipboard-outline" size={24} color="#FFF" />
         <Text style={styles.fabText}>New Inspection</Text>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -15,6 +16,7 @@ import RegisterScreen from './screens/RegisterScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import EquipmentDetailScreen from './screens/EquipmentDetailScreen';
 import QRScannerScreen from './screens/QRScannerScreen';
+import InspectionFormScreen from './screens/InspectionFormScreen';
 
 //env setup
 import { Config } from './config';
@@ -68,10 +70,17 @@ export default function App() {
                 <Stack.Screen 
                   name="MainTabs" 
                   component={TabNavigator} 
-                  options={({ navigation }) => ({
-                    headerShown: true, // Turn header on for the main app
-                    header: () => <AppHeader title="Side-Kick" navigation={navigation} />
-                  })}
+                  options={({ route, navigation }) => ({
+                    // 1. This tells the Stack to use your custom component
+                    header: () => (
+                      <AppHeader 
+                        title={getFocusedRouteNameFromRoute(route) ?? 'Dashboard'} 
+                        navigation={navigation} 
+                      />
+                    ),
+                    // 2. Make sure this is TRUE
+                    headerShown: true, 
+                  })} 
                 />
                 
                 {/* Profile Screen is a SIBLING to the Tabs, so it hides them when open */}
@@ -104,6 +113,12 @@ export default function App() {
                     orientation: 'portrait', // Keeps the UI stable during awkward scan angles
                     presentation: 'fullScreenModal', // Prevents accidental "swipe-to-close" on iOS                  
                   })} 
+                />
+
+                <Stack.Screen 
+                  name="InspectionForm" 
+                  component={InspectionFormScreen} 
+                  options={{ title: 'Live Inspection' }} 
                 />
               </Stack.Group>
             ) : (
