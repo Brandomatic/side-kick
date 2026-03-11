@@ -1,399 +1,128 @@
-  const mainComp = [
-    {id: '0',
-    label: 'Structure',
-    value: 'Structure'},
-    {id: '1',
-    label: 'Bridge',
-    value: 'Bridge'},
-    {id: '2',
-    label: 'Hoist',
-    value: 'Hoist'},
-    {id: '3',
-    label: 'Trolley',
-    value: 'Trolley'},
+// --- COMPONENT DATA ---
+const structureItems = [
+  { id: '0', label: 'Run Rail' }, { id: '1', label: 'Bolts' }, { id: '2', label: 'Supports' },
+  { id: '3', label: 'Bridge Rail' }, { id: '4', label: 'Bridge Track' }, { id: '5', label: 'End Stop' },
+  { id: '6', label: 'Cable Reel/Bus Bar' }, { id: '7', label: 'Warning Device' }, { id: '8', label: 'Disconnect' },
+  { id: '9', label: 'Capacity Signs' }, { id: '10', label: 'Lights' }, { id: '11', label: 'Radio' },
+  { id: '12', label: 'Collectors/Shoes' }, { id: '13', label: 'Jib' }, { id: '14', label: 'Custom' },
+];
+
+const bridgeItems = [
+  { id: '0', label: 'Motor/SEW A' }, { id: '1', label: 'Gear case A' }, { id: '2', label: 'Brakes A' },
+  { id: '3', label: 'Motor/SEW B' }, { id: '4', label: 'Gear case B' }, { id: '5', label: 'Brakes B' },
+  { id: '6', label: 'Wheels' }, { id: '7', label: 'Wheel Bearings' }, { id: '8', label: 'Guide Rollers' },
+  { id: '9', label: 'Shaft Bearings' }, { id: '10', label: 'Bumpers' }, { id: '11', label: 'Rail Sweeps' },
+  { id: '12', label: 'Limits' }, { id: '13', label: 'Drop Stops' }, { id: '14', label: 'End Truck' },
+  { id: '15', label: 'Directional Signs' }, { id: '16', label: 'Contactors' }, { id: '17', label: 'Electrical' },
+  { id: '18', label: 'Festooning' }, { id: '19', label: 'Custom' },
+];
+
+const ropeItems = [
+  { id: '0', label: 'Motor' }, { id: '1', label: 'Gearcase' }, { id: '2', label: 'Brake' },
+  { id: '3', label: 'Contactors' }, { id: '4', label: 'Upper Limit' }, { id: '5', label: 'Lower Limit' },
+  { id: '6', label: 'Rope Guide' }, { id: '7', label: 'Load Limit' }, { id: '8', label: 'Upper Sheaves' },
+  { id: '9', label: 'Bottom Block' }, { id: '10', label: 'Hook' }, { id: '11', label: 'Latch' },
+  { id: '12', label: 'Wire Rope' }, { id: '13', label: 'Capacity Sign' }, { id: '14', label: 'Electrical' },
+  { id: '15', label: 'Custom' },
+];
+
+const chainItems = [
+  { id: '0', label: 'Chain' }, { id: '1', label: 'Cable' }, { id: '2', label: 'Top Hook' },
+  { id: '3', label: 'Bottom Hook' }, { id: '4', label: 'Pocket Wheel' }, { id: '5', label: 'Limit Switch' },
+  { id: '6', label: 'Housing' }, { id: '7', label: 'SWL' }, { id: '8', label: 'Motor' },
+  { id: '9', label: 'Brake' }, { id: '10', label: 'Wiring' }, { id: '11', label: 'Springs' },
+  { id: '12', label: 'Lubrication' }, { id: '13', label: 'Operating Controls' }, { id: '14', label: 'Air Systems' },
+  { id: '15', label: 'Hand Chain' }, { id: '16', label: 'Custom' },
+];
+
+const trolleyRItems = [
+  { id: '0', label: 'Motor' }, { id: '1', label: 'Brake' }, { id: '2', label: 'Wheels' },
+  { id: '3', label: 'Wheels Bearings' }, { id: '4', label: 'Bumpers' }, { id: '5', label: 'Drop Stops' },
+  { id: '6', label: 'Rail Sweeps' }, { id: '7', label: 'Shafts' }, { id: '8', label: 'Guide Rollers' },
+  { id: '9', label: 'Toe Arm' }, { id: '10', label: 'Limits' }, { id: '11', label: 'Contactors' },
+  { id: '12', label: 'Pendant' }, { id: '13', label: 'Pendant Cable' }, { id: '14', label: 'Electrical' },
+  { id: '15', label: 'Festooning' }, { id: '16', label: 'Custom' },
+];
+
+const trolleyCItems = [
+  { id: '0', label: 'Motor' }, { id: '1', label: 'Brake' }, { id: '2', label: 'Wheels' },
+  { id: '3', label: 'Wheels Bearings' }, { id: '4', label: 'Bumpers' }, { id: '5', label: 'Drop Stops' },
+  { id: '6', label: 'Rail Sweeps' }, { id: '7', label: 'Shafts' }, { id: '8', label: 'Guide Rollers' },
+  { id: '9', label: 'Toe Arm' }, { id: '10', label: 'Limits' }, { id: '11', label: 'Contactors' },
+  { id: '12', label: 'Pendant' }, { id: '13', label: 'Pendant Cable' }, { id: '14', label: 'Electrical' },
+  { id: '15', label: 'Festooning' }, { id: '16', label: 'Derailers' }, { id: '17', label: 'Air' }, { id: '18', label: 'Custom' },
+];
+
+// --- LOGIC HELPER ---
+const filterPoweredItems = (items, isPowered, isHoistSection = false) => {
+  if (isPowered) return items;
+
+  // Keywords that definitely indicate electrical/powered components
+  let electricalKeywords = [
+    'Motor', 'Contactor', 'Electrical', 'Festoon', 
+    'Limit', 'Radio', 'Pendant', 'Wiring', 'SEW', 'Air'
   ];
 
-  const structure = [
-    {id: '0',
-    label: 'Run Rail',
-    value: 'Run Rail'},
-    {id: '1',
-    label: 'Bolts',
-    value: 'Bolts'},
-    {id: '2',
-    label: 'Supports',
-    value: 'Supports'},
-    {id: '3',
-    label: 'Bridge Rail',
-    value: 'Bridge Rail'},
-    {id: '4',
-    label: 'Bridge Track',
-    value: 'Bridge Track'},
-    {id: '5',
-    label: 'End Stop',
-    value: 'End Stop'},
-    {id: '6',
-    label: 'Cable Reel/Bus Bar',
-    value: 'Cable Reel/Bus Bar'},
-    {id: '7',
-    label: 'Warning Device',
-    value: 'Warning Device'},
-    {id: '8',
-    label: 'Disconnect',
-    value: 'Disconnect'},
-    {id: '9',
-    label: 'Capacity Signs',
-    value: 'Capacity Signs'},
-    {id: '10',
-    label: 'Lights',
-    value: 'Lights'},
-    {id: '11',
-    label: 'Radio',
-    value: 'Radio'},
-    {id: '12',
-    label: 'Collectors/Shoes',
-    value: 'Collectors/Shoes'},
-    {id: '13',
-    label: 'Jib',
-    value: 'Jib'},
-    {id: '14',
-    label: 'Custom',
-    value: 'Custom'},
-  ];
+  // Logic: For Hoists, we KEEP 'Brake' because of mechanical load brakes.
+  // For Bridge/Trolley, we STRIP 'Brake' if they are manual.
+  if (!isHoistSection) {
+    electricalKeywords.push('Brake');
+  }
 
-  const bridge = [
-    {id: '0',
-    label: 'Motor/SEW A',
-    value: 'Motor/SEW A'},
-    {id: '1',
-    label: 'Gear case A',
-    value: 'Gear case A'},
-    {id: '2',
-    label: 'Brakes A',
-    value: 'Brakes A'},
-    {id: '3',
-    label: 'Motor/SEW B',
-    value: 'Motor/SEW B'},
-    {id: '4',
-    label: 'Gear case B',
-    value: 'Gear case B'},
-    {id: '5',
-    label: 'Brakes B',
-    value: 'Brakes B'},
-    {id: '6',
-    label: 'Wheels',
-    value: 'Wheels'},
-    {id: '7',
-    label: 'Wheel Bearings',
-    value: 'Wheel Bearings'},
-    {id: '8',
-    label: 'Guide Rollers',
-    value: 'Guide Rollers'},
-    {id: '9',
-    label: 'Shaft Bearings',
-    value: 'Shaft Bearings'},
-    {id: '10',
-    label: 'Bumpers',
-    value: 'Bumpers'},
-    {id: '11',
-    label: 'Rail Sweeps',
-    value: 'Rail Sweeps'},
-    {id: '12',
-    label: 'Limits',
-    value: 'Limits'},
-    {id: '13',
-    label: 'Drop Stops',
-    value: 'Drop Stops'},
-    {id: '14',
-    label: 'End Truck',
-    value: 'End Truck'},
-    {id: '15',
-    label: 'Directional Signs',
-    value: 'Directional Signs'},
-    {id: '16',
-    label: 'Contactors',
-    value: 'Contactors'},
-    {id: '17',
-    label: 'Electrical',
-    value: 'Electrical'},
-    {id: '18',
-    label: 'Festooning',
-    value: 'Festooning'},
-    {id: '19',
-    label: 'Custom',
-    value: 'Custom'},
-  ];
+  return items.filter(item => 
+    !electricalKeywords.some(key => item.label.includes(key))
+  );
+};
 
-  const rope = [
-    {id: '0',
-    label: 'Motor',
-    value: 'Motor'},       
-    {id: '1',
-    label: 'Gearcase',
-    value: 'Gearcase'},       
-    {id: '2',
-    label: 'Brake',
-    value: 'Brake'},       
-    {id: '3',
-    label: 'Contactors',
-    value: 'Contactors'},       
-    {id: '4',
-    label: 'Upper Limit',
-    value: 'Upper Limit'},       
-    {id: '5',
-    label: 'Lower Limit',
-    value: 'Lower Limit'},       
-    {id: '6',
-    label: 'Rope Guide',
-    value: 'Rope Guide'},       
-    {id: '7',
-    label: 'Load Limit',
-    value: 'Load Limit'},       
-    {id: '8',
-    label: 'Upper Sheaves',
-    value: 'Upper Sheaves'},       
-    {id: '9',
-    label: 'Bottom Block',
-    value: 'Bottom Block'},       
-    {id: '10',
-    label: 'Hook',
-    value: 'Hook'},       
-    {id: '11',
-    label: 'Latch',
-    value: 'Latch'},       
-    {id: '12',
-    label: 'Wire Rope',
-    value: 'Wire Rope'},       
-    {id: '13',
-    label: 'Capacity Sign',
-    value: 'Capacity Sign'},       
-    {id: '14',
-    label: 'Electrical',
-    value: 'Electrical'},       
-    {id: '15',
-    label: 'Custom',
-    value: 'Custom'},       
-  ];
-
-  const chain = [
-    {id: '0',
-    label: 'Chain',
-    value: 'Chain'},       
-    {id: '1',
-    label: 'Cable',
-    value: 'Cable'},       
-    {id: '2',
-    label: 'Top Hook',
-    value: 'Top Hook'},       
-    {id: '3',
-    label: 'Bottom Hook',
-    value: 'Bottom Hook'},       
-    {id: '4',
-    label: 'Pocket Wheel',
-    value: 'Pocket Wheel'},       
-    {id: '5',
-    label: 'Limit Switch',
-    value: 'Limit Switch'},       
-    {id: '6',
-    label: 'Housing',
-    value: 'Housing'},       
-    {id: '7',
-    label: 'SWL',
-    value: 'SWL'},       
-    {id: '8',
-    label: 'Motor',
-    value: 'Motor'},       
-    {id: '9',
-    label: 'Brake',
-    value: 'Brake'},       
-    {id: '10',
-    label: 'Wiring',
-    value: 'Wiring'},       
-    {id: '11',
-    label: 'Springs',
-    value: 'Springs'},       
-    {id: '12',
-    label: 'Lubrication',
-    value: 'Lubrication'},       
-    {id: '13',
-    label: 'Operating Controls',
-    value: 'Operating Controls'},       
-    {id: '14',
-    label: 'Air Systems',
-    value: 'Air Systems'},       
-    {id: '15',
-    label: 'Hand Chain',
-    value: 'Hand Chain'},     
-    {id: '16',
-    label: 'Custom',
-    value: 'Custom'},  
-  ];
-
-  const trolleyR = [
-    {id: '0',
-    label: 'Motor',
-    value: 'Motor'},
-    {id: '1',
-    label: 'Brake',
-    value: 'Brake'},
-    {id: '2',
-    label: 'Wheels',
-    value: 'Wheels'},
-    {id: '3',
-    label: 'Wheels Bearings',
-    value: 'Wheels Bearings'},
-    {id: '4',
-    label: 'Bumpers',
-    value: 'Bumpers'},
-    {id: '5',
-    label: 'Drop Stops',
-    value: 'Drop Stops'},
-    {id: '6',
-    label: 'Rail Sweeps',
-    value: 'Rail Sweeps'},
-    {id: '7',
-    label: 'Shafts',
-    value: 'Shafts'},
-    {id: '8',
-    label: 'Guide Rollers',
-    value: 'Guide Rollers'},
-    {id: '9',
-    label: 'Toe Arm',
-    value: 'Toe Arm'},
-    {id: '10',
-    label: 'Limits',
-    value: 'Limits'},
-    {id: '11',
-    label: 'Contactors',
-    value: 'Contactors'},
-    {id: '12',
-    label: 'Pendant',
-    value: 'Pendant'},
-    {id: '13',
-    label: 'Pendant Cable',
-    value: 'Pendant Cable'},
-    {id: '14',
-    label: 'Electrical',
-    value: 'Electrical'},
-    {id: '15',
-    label: 'Festooning',
-    value: 'Festooning'},
-    {id: '16',
-    label: 'Custom',
-    value: 'Custom'},
-  ];
-
-  const trolleyC = [
-    {id: '0',
-    label: 'Motor',
-    value: 'Motor'},
-    {id: '1',
-    label: 'Brake',
-    value: 'Brake'},
-    {id: '2',
-    label: 'Wheels',
-    value: 'Wheels'},
-    {id: '3',
-    label: 'Wheels Bearings',
-    value: 'Wheels Bearings'},
-    {id: '4',
-    label: 'Bumpers',
-    value: 'Bumpers'},
-    {id: '5',
-    label: 'Drop Stops',
-    value: 'Drop Stops'},
-    {id: '6',
-    label: 'Rail Sweeps',
-    value: 'Rail Sweeps'},
-    {id: '7',
-    label: 'Shafts',
-    value: 'Shafts'},
-    {id: '8',
-    label: 'Guide Rollers',
-    value: 'Guide Rollers'},
-    {id: '9',
-    label: 'Toe Arm',
-    value: 'Toe Arm'},
-    {id: '10',
-    label: 'Limits',
-    value: 'Limits'},
-    {id: '11',
-    label: 'Contactors',
-    value: 'Contactors'},
-    {id: '12',
-    label: 'Pendant',
-    value: 'Pendant'},
-    {id: '13',
-    label: 'Pendant Cable',
-    value: 'Pendant Cable'},
-    {id: '14',
-    label: 'Electrical',
-    value: 'Electrical'},
-    {id: '15',
-    label: 'Festooning',
-    value: 'Festooning'},
-    {id: '16',
-    label: 'Derailers',
-    value: 'Derailers'},
-    {id: '17',
-    label: 'Air',
-    value: 'Air'},
-    {id: '18',
-    label: 'Custom',
-    value: 'Custom'},
-  ];
-
-export const generateChecklist = (specs) => {
+// --- MAIN GENERATOR ---
+export const generateChecklist = (equipment) => {
+  const { equipType, hoistType, bridgeSpecs, trolleySpecs, hoistSpecs } = equipment;
   const checklist = [];
 
-  // 1. Structure
+  // 1. Structure (Always Included)
   checklist.push({
     section: 'Structure',
-    items: structure.map(item => ({
-      ...item,
-      id: `struct-${item.id}`,
-      status: 'OK',
-      notes: '',
-      isMonitor: undefined
+    items: structureItems.map(item => ({
+      ...item, id: `struct-${item.id}`, status: 'OK', notes: '', isMonitor: false
     }))
   });
 
-  // 2. Bridge
+  // 2. Bridge (Exclude if Jib, filter if Manual)
+  if (equipType !== 'JIB' && equipType !== 'Jib') {
+    const isPowered = bridgeSpecs?.isPowered !== false; 
+    const filteredBridge = filterPoweredItems(bridgeItems, isPowered, false);
+    checklist.push({
+      section: 'Bridge',
+      items: filteredBridge.map(item => ({
+        ...item, id: `bridge-${item.id}`, status: 'OK', notes: '', isMonitor: false
+      }))
+    });
+  }
+
+  // 3. Hoist (Conditional on Rope vs Chain + Power)
+  const isRope = hoistType === 'Wire Rope';
+  const rawHoist = isRope ? ropeItems : chainItems;
+  const isHoistPowered = hoistSpecs?.isPowered !== false;
+  
+  // Note: We set the 3rd argument to 'true' to preserve 'Brake' for manual hoists
+  const filteredHoist = filterPoweredItems(rawHoist, isHoistPowered, true);
+  
   checklist.push({
-    section: 'Bridge',
-    items: bridge.map(item => ({
-      ...item,
-      id: `bridge-${item.id}`,
-      status: 'OK',
-      notes: '',
-      isMonitor: undefined
+    section: `Hoist (${hoistType})`,
+    items: filteredHoist.map(item => ({
+      ...item, id: `hoist-${item.id}`, status: 'OK', notes: '', isMonitor: false
     }))
   });
 
-  // 3. Hoist (Conditional)
-  const isRope = specs.hoistType === 'Wire Rope';
-  const selectedHoist = isRope ? rope : chain;
-  checklist.push({
-    section: `Hoist (${isRope ? 'Wire Rope' : 'Chain'})`,
-    items: selectedHoist.map(item => ({
-      ...item,
-      id: `hoist-${item.id}`,
-      status: 'OK',
-      notes: '',
-      isMonitor: undefined
-    }))
-  });
-
-  // 4. Trolley (Conditional)
-  const selectedTrolley = isRope ? trolleyR : trolleyC;
+  // 4. Trolley (Power filter)
+  const rawTrolley = isRope ? trolleyRItems : trolleyCItems;
+  const isTrolleyPowered = trolleySpecs?.isPowered !== false;
+  const filteredTrolley = filterPoweredItems(rawTrolley, isTrolleyPowered, false);
+  
   checklist.push({
     section: 'Trolley',
-    items: selectedTrolley.map(item => ({
-      ...item,
-      id: `trolley-${item.id}`,
-      status: 'OK',
-      notes: '',
-      isMonitor: undefined
+    items: filteredTrolley.map(item => ({
+      ...item, id: `trolley-${item.id}`, status: 'OK', notes: '', isMonitor: false
     }))
   });
 

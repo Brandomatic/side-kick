@@ -1,203 +1,241 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, Alert, ActivityIndicator } from 'react-native';
+import { 
+  View, Text, TextInput, TouchableOpacity, StyleSheet, Image, 
+  Alert, ActivityIndicator, KeyboardAvoidingView, Platform 
+} from 'react-native';
 import { UserContext } from '../components/MyContexts';
 import { COLORS } from '../theme';
-import { Ionicons } from '@expo/vector-icons';
+import { moderateScale } from '../utils/metrics';
+import { PATHS } from '../utils/Paths';
 
 // Firebase imports
 import { auth, db } from "../lib/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from 'firebase/firestore';
 
-import { authPersist } from "../lib/firebase";
-
 export default function LoginScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isValidatingCompany, setIsValidatingCompany] = useState(false);
+  const [isCompanyVerified, setIsCompanyVerified] = useState(false);
+  
+  const [companyId, setCompanyId] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const {user, setUser} = useContext(UserContext);
+  
+  const { user, setUser } = useContext(UserContext);
   const [errors, setErrors] = useState({});
 
-  // Effect to reset input fields
+  // Reset inputs on focus
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       setEmail('');
       setPassword('');
-    })
-    return () => unsubscribe;
+      setErrors({});
+    });
+    return unsubscribe;
   }, [navigation]);
 
-  //Effect to switch to internal app navigation
+  // Route to CustomerSelect once logged in
   useEffect(() => {
     if (user !== null) {
       setIsLoading(false);
       navigation.reset({
-      index: 0,
-      routes: [{ name: 'MainTabs' }],
-    });
-      console.log('Logged in with:', user.uid);
-      console.log('Logged in with privilege:', user.privilege);
-    };
+        index: 0,
+        routes: [{ name: 'MainTabs' }],
+      });
+    }
   }, [user]);
 
-  // SIGN IN FUNCTIONS
+  // --- STEP 1: VERIFY COMPANY ---
+  const handleVerifyCompany = async () => {
+    const cleanID = companyId.trim().toUpperCase();
+    if (!cleanID) {
+      return Alert.alert("Error", "Please enter a company access code.");
+    }
+
+    setIsValidatingCompany(true);
+    try {
+      // UPDATED: Using PATHS utility
+      const companyRef = doc(db, PATHS.company(cleanID));
+      const companySnap = await getDoc(companyRef);
+
+      if (companySnap.exists()) {
+        setIsCompanyVerified(true);
+      } else {
+        Alert.alert("Invalid Code", "That company code does not exist.");
+      }
+    } catch (error) {
+      Alert.alert("Error", "Could not verify company at this time.");
+    } finally {
+      setIsValidatingCompany(false);
+    }
+  };
+
+  // --- STEP 2: SIGN IN FUNCTIONS ---
   const validate = () => {
     let sErrors = {};
-
-    // Check if the email exists and is in a valid format
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail.includes('@')) sErrors.email = "Invalid email address";
-
-    // Check if the password exists and isn't just whitespace
-    if (!password || password.trim().length === 0) {
-      sErrors.password = "Password is required";
-    }
+    if (!password || password.trim().length === 0) sErrors.password = "Password is required";
     
     setErrors(sErrors);
-    console.log("Validation Errors:", sErrors);
     return Object.keys(sErrors).length === 0;
   };
 
   const getUserData = async (uid) => {
     try {
-      const docRef = doc(db, 'users', uid);
+      const cleanID = companyId.trim().toUpperCase();
+      // UPDATED: Using PATHS utility
+      const docRef = doc(db, PATHS.user(cleanID, uid));
       const userDoc = await getDoc(docRef);
       
       if (userDoc.exists()) {
         const docData = userDoc.data();
-        const tempUserData = {
-          privilege: docData.privilege,
-          userEmail: docData.userEmail,
-          uid: docData.uid,
-          userDisplayName: docData.userDisplayName,
-          userPhoto: docData.userPhoto,
-        };
-        setUser(tempUserData); // Set global context directly
+        setUser({
+          ...docData, // Spread all Firestore data (privilege, role, etc)
+          companyId: cleanID, 
+        });
       } else {
-        console.log("No such document in Firestore!");
+        Alert.alert("Access Denied", "User record not found under this company code.");
+        setIsLoading(false);
       }
     } catch (error) {
-      alert("Error fetching profile: " + error.message);
-    } finally {
+      Alert.alert("Error fetching profile", error.message);
       setIsLoading(false);
     }
   };
 
   const handleLogin = () => {
     if (!validate()) return;
-
-    // 1. Trigger the loading state
     setIsLoading(true);
-    //Firebase signin function
+
     signInWithEmailAndPassword(auth, email, password)
       .then(userCredentials => {
         getUserData(userCredentials.user.uid);
       })
       .catch(errorSignIn => {
         setIsLoading(false);
-        console.log('Login Error Code:', errorSignIn.code);
-
-        let userFriendlyMessage = "An unexpected error occurred. Please try again.";
-
-        // Group common credential errors for security
-        if (
-          errorSignIn.code === 'auth/user-not-found' || 
-          errorSignIn.code === 'auth/wrong-password' || 
-          errorSignIn.code === 'auth/invalid-credential' ||
-          errorSignIn.code === 'auth/invalid-email'
-        ) {
-          userFriendlyMessage = "Invalid email or password. Please check your credentials.";
-        } else if (errorSignIn.code === 'auth/too-many-requests') {
-          userFriendlyMessage = "Too many failed attempts. Please try again later.";
-        } else if (errorSignIn.code === 'auth/network-request-failed') {
-          userFriendlyMessage = "Network error. Please check your internet connection.";
-        }
-
-        Alert.alert("Login Failed", userFriendlyMessage);
+        Alert.alert("Login Failed", "Invalid email or password for this company.");
       });
   };
 
   return (
-    <View style={styles.container}>      
+    <KeyboardAvoidingView 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+      style={styles.container}
+    >
+      <View style={styles.inner}>
+        <Image source={require('../assets/icon.png')} style={styles.logo} />
+        <Text style={styles.title}>SIDE-KICK</Text>
 
-      <Image source={require('../assets/icon.png')} style={styles.logo} />
-
-      <Text style={styles.title}>SIDE-KICK</Text>
-
-      <TextInput 
-        style={[styles.input, errors.email && styles.inputError]} 
-        placeholder="Email"
-        keyboardType="email-address"
-        returnKeyType="next"
-        onChangeText={(email) => {setEmail(email); setErrors({})}}
-      />
-      {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
-
-      <TextInput 
-        style={[styles.input, errors.password && styles.inputError]} 
-        placeholder="Password" 
-        secureTextEntry
-        autoCapitalize="none"
-        returnKeyType="done"
-        onChangeText={(txt) => {setPassword(txt); setErrors({})}}
-      />
-      {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
-
-      <TouchableOpacity 
-      style={[
-        styles.button, 
-        // This adds 70% opacity when loading
-        isLoading && { opacity: 0.7 },
-        // This adds 50% opacity if fields are empty (Optional but nice)
-        (!email || !password) && { opacity: 0.5 } 
-        ]} 
-        onPress={handleLogin}
-        // Prevent clicking while loading or empty
-        disabled={isLoading || !email || !password}>
-        {/* Show loading spinner when isLoading is true, otherwise show "Log In" text */}
-        {isLoading ? (
-          <ActivityIndicator color="#FFFFFF" /> 
+        {!isCompanyVerified ? (
+          <View style={styles.card}>
+            <View style={styles.titleRow}>
+              <Text style={styles.cardTitle}>Company Access</Text>
+              <TouchableOpacity 
+                onPress={() => Alert.alert(
+                  "Company Access Code", 
+                  "Unique 6-digit organization code. Contact your admin if you don't have it."
+                )}
+                style={styles.infoBtn}
+              >
+                <Text style={styles.infoIcon}>ⓘ</Text> 
+              </TouchableOpacity>
+            </View>
+            <TextInput 
+              style={styles.input} 
+              placeholder="Enter Company Code"
+              placeholderTextColor="#999"
+              autoCapitalize="characters"
+              value={companyId}
+              onChangeText={setCompanyId}
+            />
+            <TouchableOpacity 
+              style={styles.button} 
+              onPress={handleVerifyCompany} 
+              disabled={isValidatingCompany}
+            >
+              {isValidatingCompany ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Verify Company</Text>}
+            </TouchableOpacity>
+          </View>
         ) : (
-          <Text style={styles.buttonText}>Log In</Text>
-        )}
-      </TouchableOpacity>
+          <View style={styles.card}>
+            <View style={styles.verifiedRow}>
+              <Text style={styles.verifiedText}>Company: {companyId.toUpperCase()}</Text>
+              <TouchableOpacity onPress={() => setIsCompanyVerified(false)}>
+                <Text style={styles.editText}>Change</Text>
+              </TouchableOpacity>
+            </View>
 
-      <TouchableOpacity 
-        onPress={() => navigation.navigate('Register')} 
-        style={styles.registerLink}>
-          <Text style={styles.footerText}>Don't have an account? <Text style={styles.registerText}>Register</Text>
-          </Text>
-      </TouchableOpacity>
-    </View>
+            <TextInput 
+              style={[styles.input, errors.email && styles.inputError]} 
+              placeholder="Email"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={(txt) => {setEmail(txt); setErrors({})}}
+            />
+            {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+
+            <TextInput 
+              style={[styles.input, errors.password && styles.inputError]} 
+              placeholder="Password" 
+              secureTextEntry
+              autoCapitalize="none"
+              value={password}
+              onChangeText={(txt) => {setPassword(txt); setErrors({})}}
+            />
+            {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+
+            <TouchableOpacity 
+              style={[styles.button, (isLoading || !email || !password) && { opacity: 0.7 }]} 
+              onPress={handleLogin}
+              disabled={isLoading || !email || !password}
+            >
+              {isLoading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Log In</Text>}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Register', { prefilledCode: companyId })} 
+          style={styles.registerLink}
+        >
+          <Text style={styles.footerText}>Need a tech account? <Text style={styles.registerText}>Register</Text></Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Company Registration')} 
+          style={styles.companyRegLink}
+        >
+          <Text style={styles.goldText}>Register a new company</Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background, padding: 30, justifyContent: 'center', alignContent: 'center' },
-  title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center', color: COLORS.primary, marginBottom: 60 },
-  input: { height: 55, borderWidth: 1, borderColor: '#DDD', borderRadius: 12, paddingHorizontal: 15, marginBottom: 10, marginTop: 5 },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  inner: { flex: 1, padding: moderateScale(30), justifyContent: 'center' },
+  logo: { width: moderateScale(120), height: moderateScale(120), alignSelf: 'center', marginBottom: moderateScale(20), borderRadius: moderateScale(20) },
+  title: { fontSize: moderateScale(28), fontWeight: 'bold', textAlign: 'center', color: COLORS.primary, marginBottom: moderateScale(40) },
+  card: { backgroundColor: '#FFF', padding: moderateScale(20), borderRadius: moderateScale(16), elevation: 4 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: moderateScale(15) },
+  cardTitle: { fontSize: moderateScale(18), fontWeight: '700', color: '#333' },
+  infoBtn: { padding: moderateScale(5) },
+  infoIcon: { fontSize: moderateScale(20), color: COLORS.primary, fontWeight: 'bold' },
+  input: { height: moderateScale(55), borderWidth: 1, borderColor: COLORS.primary, borderRadius: moderateScale(12), paddingHorizontal: moderateScale(15), marginBottom: moderateScale(10), fontSize: moderateScale(16) },
   inputError: { borderColor: 'red' },
-  errorText: { color: 'red', fontSize: 12, marginBottom: 5, marginLeft: 5 },
-  button: { backgroundColor: COLORS.primary, height: 55, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 5 },
-  buttonText: { color: '#FFF', fontSize: 18, fontWeight: '700' },
-  logo: {
-    width: 180,    // Set a specific size for your login screen logo
-    height: 180,
-    alignSelf: 'center',
-    marginBottom: 60,
-    borderRadius: 20, // Optional: gives your logo rounded corners
-  },
-  registerLink: {
-    marginTop: 25,
-    alignSelf: 'center',
-  },
-  footerText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  registerText: {
-    color: COLORS.primary,
-    fontSize: 16,
-    fontWeight: '700',
-  },
+  errorText: { color: 'red', fontSize: moderateScale(12), marginBottom: moderateScale(5), marginLeft: moderateScale(5) },
+  button: { backgroundColor: COLORS.primary, height: moderateScale(55), borderRadius: moderateScale(12), alignItems: 'center', justifyContent: 'center', marginTop: moderateScale(10) },
+  buttonText: { color: '#FFF', fontSize: moderateScale(18), fontWeight: '700' },
+  verifiedRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: moderateScale(15), paddingBottom: moderateScale(10), borderBottomWidth: 1, borderBottomColor: '#EEE' },
+  verifiedText: { fontSize: moderateScale(14), fontWeight: 'bold', color: '#2E7D32' },
+  editText: { fontSize: moderateScale(14), color: COLORS.primary, textDecorationLine: 'underline' },
+  registerLink: { marginTop: moderateScale(25), alignSelf: 'center' },
+  footerText: { color: '#666', fontSize: moderateScale(14) },
+  registerText: { color: COLORS.primary, fontSize: moderateScale(16), fontWeight: '700' },
+  companyRegLink: { marginTop: moderateScale(20), alignSelf: 'center' },
+  goldText: { color: '#EAB308', fontSize: moderateScale(15), fontWeight: '700', textDecorationLine: 'underline' }
 });

@@ -1,87 +1,252 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity } from 'react-native';
+import React, { useContext, useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TouchableOpacity, 
+  FlatList, 
+  ActivityIndicator,
+  StatusBar 
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+// MODULAR FIREBASE IMPORTS
+import { collection, onSnapshot } from "firebase/firestore"; 
+import { auth, db } from "../lib/firebase";
+
+import { UserContext } from '../components/MyContexts';
 import { moderateScale } from '../utils/metrics';
 import { COLORS } from '../theme';
 
-const MOCK_DATA = [
-  { id: '101', name: 'Crane Alpha', type: 'Tower Crane', status: 'Clear' },
-  { id: '102', name: 'Elevator 02', type: 'Passenger', status: 'Warning' },
-  { id: '103', name: 'Escalator North', type: 'Heavy Duty', status: 'Overdue' },
-  { id: '104', name: 'Hoist Unit 7', type: 'Material Hoist', status: 'Clear' },
-];
-
 export default function EquipmentScreen({ navigation }) {
-  const [search, setSearch] = useState('');
+  const { currentCustomer, user, setCurrentEquipment } = useContext(UserContext);
+  const [loading, setLoading] = useState(true);
+  const [cranes, setCranes] = useState([]);
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.card} 
-      onPress={() => navigation.navigate('EquipmentDetail', { unitId: item.id })}
-    >
-      <View style={[styles.statusLine, { backgroundColor: getStatusColor(item.status) }]} />
-      <View style={styles.cardContent}>
-        <Text style={styles.unitName}>{item.name} <Text style={styles.unitId}>#{item.id}</Text></Text>
-        <Text style={styles.unitType}>{item.type}</Text>
+  useEffect(() => {
+    // ✅ Logic updated: Use the full path from context
+    if (!currentCustomer?.path) {
+      setLoading(false);
+      return;
+    }
+    
+    // Path: companies/{companyId}/customers/{customerId}/cranes
+    // (Note: Adjusted to point to the 'cranes' sub-collection within your tenant path)
+    const craneRef = collection(db, currentCustomer.path, 'cranes');
+
+    const unsubscribe = onSnapshot(craneRef, (snapshot) => {
+      const craneData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      
+      setCranes(craneData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Equipment Sync Error:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentCustomer?.path]); // Depend on the path for re-syncs
+
+  const handleSelectEquipment = (item) => {
+    setCurrentEquipment(item);
+    navigation.navigate('EquipmentDetail');
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary || "#1A1A1A"} />
       </View>
-      <Ionicons name="chevron-forward" size={20} color="#CCC" />
-    </TouchableOpacity>
-  );
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchSection}>
-        <Ionicons name="search" size={20} color="#888" style={{ marginRight: 10 }} />
-        <TextInput 
-          placeholder="Search by ID or Name..." 
-          style={styles.searchInput}
-          value={search}
-          onChangeText={setSearch}
-        />
+      <StatusBar barStyle="dark-content" />
+      
+      <View style={styles.subHeader}>
+        <Text style={styles.customerText}>
+          {currentCustomer?.name || 'Select Customer'}
+        </Text>
       </View>
 
-      <FlatList 
-        data={MOCK_DATA}
-        keyExtractor={item => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={{ padding: moderateScale(15), paddingBottom: 100 }}
+      <FlatList
+        data={cranes}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        renderItem={({ item }) => (
+          <TouchableOpacity 
+            style={styles.equipmentCard}
+            onPress={() => handleSelectEquipment(item)}
+          >
+            <View style={styles.cardInfo}>
+              <View style={styles.iconBox}>
+                <Ionicons name="construct" size={moderateScale(22)} color="#444" />
+              </View>
+              <View>
+                <Text style={styles.unitIdText}>{item.unitId || 'Unknown Unit'}</Text>
+                <Text style={styles.specText}>
+                  {item.specs?.hoistType || 'No Type'} • {item.specs?.capacity || '0 Ton'}
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={moderateScale(20)} color="#CCC" />
+          </TouchableOpacity>
+        )}
+        
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="layers-outline" size={moderateScale(60)} color="#DDD" />
+            </View>
+            <Text style={styles.emptyTitle}>No Equipment Found</Text>
+            <Text style={styles.emptySubtext}>
+              No units registered for {currentCustomer?.name}. Add a crane to begin.
+            </Text>
+            <TouchableOpacity 
+              style={styles.primaryAddBtn}
+              onPress={() => navigation.navigate('AddEquipment')}
+            >
+              <Text style={styles.primaryAddBtnText}>Add First Crane</Text>
+            </TouchableOpacity>
+          </View>
+        }
       />
+
+      {cranes.length > 0 && (
+        <TouchableOpacity 
+          style={styles.fab} 
+          onPress={() => {
+            setCurrentEquipment(null);
+            navigation.navigate('AddEquipment')
+          }}
+        >
+          <Ionicons name="add" size={moderateScale(32)} color="#FFF" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
-const getStatusColor = (status) => {
-  if (status === 'Clear') return '#4CAF50';
-  if (status === 'Warning') return '#FFC107';
-  return '#F44336';
-};
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F4F7F6' },
-  searchSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    margin: moderateScale(15),
-    paddingHorizontal: 15,
-    borderRadius: 10,
-    height: moderateScale(50),
-    elevation: 2,
-    shadowOpacity: 0.1,
+  container: { 
+    flex: 1, 
+    backgroundColor: '#F4F7F6' 
   },
-  searchInput: { flex: 1, fontSize: 16 },
-  card: {
-    backgroundColor: '#FFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderRadius: 10,
-    overflow: 'hidden',
-    paddingRight: 15,
+  loadingContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
   },
-  statusLine: { width: 6, height: '100%' },
-  cardContent: { flex: 1, padding: 15 },
-  unitName: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  unitId: { fontSize: 14, fontWeight: '400', color: '#888' },
-  unitType: { fontSize: 14, color: '#666', marginTop: 4 }
+  subHeader: {
+    paddingHorizontal: moderateScale(20),
+    paddingTop: moderateScale(20),
+    paddingBottom: moderateScale(10),
+    backgroundColor: '#F4F7F6',
+  },
+  customerText: { 
+    fontSize: moderateScale(24), 
+    fontWeight: 'bold', 
+    color: '#1A1A1A' 
+  },
+  listContent: { 
+    flexGrow: 1,
+    padding: moderateScale(20),
+    paddingBottom: moderateScale(120) 
+  },
+  equipmentCard: {
+    backgroundColor: '#FFF',
+    padding: moderateScale(15),
+    borderRadius: moderateScale(16),
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: moderateScale(12),
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: moderateScale(8),
+    shadowOffset: { width: 0, height: 2 }
+  },
+  cardInfo: { 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  iconBox: {
+    width: moderateScale(45),
+    height: moderateScale(45),
+    borderRadius: moderateScale(12),
+    backgroundColor: '#F0F0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: moderateScale(15)
+  },
+  unitIdText: { 
+    fontSize: moderateScale(18), 
+    fontWeight: 'bold', 
+    color: '#1A1A1A' 
+  },
+  specText: { 
+    fontSize: moderateScale(13), 
+    color: '#666', 
+    marginTop: moderateScale(2) 
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: moderateScale(80),
+  },
+  emptyIconCircle: {
+    width: moderateScale(120),
+    height: moderateScale(120),
+    borderRadius: moderateScale(60),
+    backgroundColor: '#EAEAEA',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: moderateScale(20)
+  },
+  emptyTitle: { 
+    fontSize: moderateScale(20), 
+    fontWeight: 'bold', 
+    color: '#333' 
+  },
+  emptySubtext: { 
+    fontSize: moderateScale(14), 
+    color: '#999', 
+    textAlign: 'center', 
+    marginTop: moderateScale(10),
+    paddingHorizontal: moderateScale(40)
+  },
+  primaryAddBtn: {
+    backgroundColor: '#1A1A1A',
+    paddingVertical: moderateScale(16),
+    paddingHorizontal: moderateScale(40),
+    borderRadius: moderateScale(12),
+    marginTop: moderateScale(30),
+  },
+  primaryAddBtnText: { 
+    color: '#FFF', 
+    fontWeight: 'bold', 
+    fontSize: moderateScale(16) 
+  },
+  fab: {
+    position: 'absolute',
+    bottom: moderateScale(30), 
+    right: moderateScale(25),
+    width: moderateScale(65),
+    height: moderateScale(65),
+    borderRadius: moderateScale(32.5),
+    backgroundColor: '#1A1A1A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+  },
 });

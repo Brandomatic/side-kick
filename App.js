@@ -4,21 +4,29 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import * as SplashScreen from 'expo-splash-screen';
-import { UserContext, ToolbarContext } from './components/MyContexts';
-import AppHeader from './components/AppHeader';
+import { Asset } from 'expo-asset';
 
-//Bottom Navigation
+// Contexts
+import { UserContext } from './components/MyContexts';
+
+// Components
+import AppHeader from './components/AppHeader';
 import TabNavigator from './navigation/TabNavigator';
+import AdminTabNavigator from './navigation/AdminTabNavigator';
 
 // Screens
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
+import CompanyRegistration from './screens/CompanyRegistration';
 import ProfileScreen from './screens/ProfileScreen';
 import EquipmentDetailScreen from './screens/EquipmentDetailScreen';
+import AddEquipmentScreen from './screens/AddEquipmentScreen';
 import QRScannerScreen from './screens/QRScannerScreen';
 import InspectionFormScreen from './screens/InspectionFormScreen';
+import CustomerSelectScreen from './screens/CustomerSelectScreen';
+import MonitorWatchlistScreen from './screens/MonitorWatchlist';
 
-//env setup
+// Config
 import { Config } from './config';
 
 const Stack = createNativeStackNavigator();
@@ -26,21 +34,31 @@ SplashScreen.preventAutoHideAsync();
 
 export default function App() {
   const [appIsReady, setAppIsReady] = useState(false);
-  const [user, setUser] = useState(null);
-  // const [toolBarImages, setToolBarImages] = useState(null);
 
-  const userProvider = useMemo(() => ({user, setUser}), [user, setUser]);
+  // --- GLOBAL STATE BUCKETS ---
+  const [user, setUser] = useState(null); // Firebase Auth Data + role
+  const [currentCustomer, setCurrentCustomer] = useState(null); // The selected site
+  const [currentEquipment, setCurrentEquipment] = useState(null); // The active crane
+
+  // Memoize the provider to include our new Customer state
+  const userProviderValue = useMemo(() => ({
+    user, 
+    setUser,
+    currentCustomer,
+    setCurrentCustomer,
+    currentEquipment,
+    setCurrentEquipment
+  }), [user, currentCustomer, currentEquipment]);
 
   useEffect(() => {
     async function prepare() {
       try {
         await Asset.fromModule(require('./assets/icon.png')).downloadAsync();
-
         await new Promise(resolve => setTimeout(resolve, 3500));
+      } catch (e) {
+        console.warn(e);
       } finally {
         setAppIsReady(true);
-        console.log("Welcome to", Config.appName);
-        console.log("Current Version:", Config.version);
       }
     }
     prepare();
@@ -55,77 +73,54 @@ export default function App() {
   if (!appIsReady) return null;
 
   return (
-    <SafeAreaProvider>
-      <UserContext.Provider value={userProvider}>
-        <NavigationContainer onReady={onLayoutRootView}>
+    <SafeAreaProvider onLayout={onLayoutRootView}>
+      <UserContext.Provider value={userProviderValue}>
+        <NavigationContainer>
           <Stack.Navigator
             screenOptions={{ 
               headerShown: false,
               animation: 'fade'
             }}
           >
-            {user ? (
-              // APP SECTION
+            {!user ? (
+              // 1. AUTH PATH: No user logged in
+              <Stack.Group screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="Login" component={LoginScreen} />
+                <Stack.Screen name="Register" component={RegisterScreen} />
+                <Stack.Screen name="Company Registration" component={CompanyRegistration} />
+              </Stack.Group>
+            ) : !currentCustomer ? (
+              // 2. CONTEXT PATH: User is in, but hasn't picked a Customer Site
+              <Stack.Group screenOptions={{ headerShown: true, title: 'Select Customer' }}>
+                <Stack.Screen name="CustomerSelect" component={CustomerSelectScreen} />
+              </Stack.Group>
+            ) : (
+              // 3. APP PATH: User & Customer are both set. Show UI based on Role.
               <Stack.Group>
                 <Stack.Screen 
                   name="MainTabs" 
-                  component={TabNavigator} 
+                  // Logic: If user is admin, we eventually swap this for AdminTabNavigator
+                  component={user?.role === 'admin' ? AdminTabNavigator : TabNavigator} 
                   options={({ route, navigation }) => ({
-                    // 1. This tells the Stack to use your custom component
                     header: () => (
                       <AppHeader 
                         title={getFocusedRouteNameFromRoute(route) ?? 'Dashboard'} 
                         navigation={navigation} 
+                        // Pass currentCustomer name to header if you want it displayed
+                        customerName={currentCustomer?.name}
                       />
                     ),
-                    // 2. Make sure this is TRUE
                     headerShown: true, 
                   })} 
                 />
                 
-                {/* Profile Screen is a SIBLING to the Tabs, so it hides them when open */}
-                <Stack.Screen 
-                  name="Profile" 
-                  component={ProfileScreen} 
-                  options={{ 
-                    headerShown: true,
-                    animation: 'slide_from_right', // Feels like a sub-menu
-                    title: 'My Account' 
-                  }} 
-                />
-
-                <Stack.Screen 
-                  name="EquipmentDetail" 
-                  component={EquipmentDetailScreen} 
-                  options={({ route }) => ({ 
-                    headerShown: true,
-                    title: route.params?.unitId ? `Unit ${route.params.unitId}` : 'Details',
-                    animation: 'slide_from_right'
-                  })} 
-                />
-
-                <Stack.Screen 
-                  name="QRScanner" 
-                  component={QRScannerScreen} 
-                  options={({ route }) => ({ 
-                    headerShown: false,
-                    animation: 'fade',
-                    orientation: 'portrait', // Keeps the UI stable during awkward scan angles
-                    presentation: 'fullScreenModal', // Prevents accidental "swipe-to-close" on iOS                  
-                  })} 
-                />
-
-                <Stack.Screen 
-                  name="InspectionForm" 
-                  component={InspectionFormScreen} 
-                  options={{ title: 'Live Inspection' }} 
-                />
-              </Stack.Group>
-            ) : (
-              // AUTH SECTION
-              <Stack.Group screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="Login" component={LoginScreen} />
-                <Stack.Screen name="Register" component={RegisterScreen} />
+                {/* GLOBAL APP SCREENS */}
+                <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: true, title: 'My Account' }} />
+                <Stack.Screen name="EquipmentDetail" component={EquipmentDetailScreen} options={{ headerShown: true, headerBackTitle: 'Back' }} />
+                <Stack.Screen name="QRScanner" component={QRScannerScreen} options={{ presentation: 'fullScreenModal' }} />
+                <Stack.Screen name="InspectionForm" component={InspectionFormScreen} options={{ headerShown: true, title: 'Live Inspection' }} />
+                <Stack.Screen name="AddEquipment" component={AddEquipmentScreen} options={{ headerShown: true, title: 'Add Asset' }} />
+                <Stack.Screen name="MonitorList" component={MonitorWatchlistScreen} options={{ headerShown: true, title: 'Monitor List' }} />
               </Stack.Group>
             )}
           </Stack.Navigator>
