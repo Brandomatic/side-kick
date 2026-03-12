@@ -12,27 +12,28 @@ import { Ionicons } from '@expo/vector-icons';
 
 // MODULAR FIREBASE IMPORTS
 import { collection, onSnapshot } from "firebase/firestore"; 
-import { auth, db } from "../lib/firebase";
+import { db } from "../lib/firebase";
 
+// Updated to unified context import as requested
 import { UserContext } from '../components/MyContexts';
+import { PATHS } from '../utils/Paths';
 import { moderateScale } from '../utils/metrics';
 import { COLORS } from '../theme';
 
 export default function EquipmentScreen({ navigation }) {
-  const { currentCustomer, user, setCurrentEquipment } = useContext(UserContext);
+  // Unified declaration
+  const { user, currentCustomer, setCurrentEquipment } = useContext(UserContext);
+  
   const [loading, setLoading] = useState(true);
   const [cranes, setCranes] = useState([]);
 
   useEffect(() => {
-    // ✅ Logic updated: Use the full path from context
-    if (!currentCustomer?.path) {
+    if (!user?.companyId || !currentCustomer?.id) {
       setLoading(false);
       return;
     }
     
-    // Path: companies/{companyId}/customers/{customerId}/cranes
-    // (Note: Adjusted to point to the 'cranes' sub-collection within your tenant path)
-    const craneRef = collection(db, currentCustomer.path, 'cranes');
+    const craneRef = collection(db, PATHS.cranes(user.companyId, currentCustomer.id));
 
     const unsubscribe = onSnapshot(craneRef, (snapshot) => {
       const craneData = snapshot.docs.map(doc => ({
@@ -48,7 +49,7 @@ export default function EquipmentScreen({ navigation }) {
     });
 
     return () => unsubscribe();
-  }, [currentCustomer?.path]); // Depend on the path for re-syncs
+  }, [user?.companyId, currentCustomer?.id]);
 
   const handleSelectEquipment = (item) => {
     setCurrentEquipment(item);
@@ -69,7 +70,7 @@ export default function EquipmentScreen({ navigation }) {
       
       <View style={styles.subHeader}>
         <Text style={styles.customerText}>
-          {currentCustomer?.name || 'Select Customer'}
+          {currentCustomer?.custName || 'Select Customer'}
         </Text>
       </View>
 
@@ -89,7 +90,7 @@ export default function EquipmentScreen({ navigation }) {
               <View>
                 <Text style={styles.unitIdText}>{item.unitId || 'Unknown Unit'}</Text>
                 <Text style={styles.specText}>
-                  {item.specs?.hoistType || 'No Type'} • {item.specs?.capacity || '0 Ton'}
+                  {item.hoistType || 'No Type'} • {item.officialCapacity || '0'} {item.capacityUnit || 'TONS'}
                 </Text>
               </View>
             </View>
@@ -104,7 +105,7 @@ export default function EquipmentScreen({ navigation }) {
             </View>
             <Text style={styles.emptyTitle}>No Equipment Found</Text>
             <Text style={styles.emptySubtext}>
-              No units registered for {currentCustomer?.name}. Add a crane to begin.
+              No units registered for {currentCustomer?.custName}. Add a crane to begin.
             </Text>
             <TouchableOpacity 
               style={styles.primaryAddBtn}
@@ -116,17 +117,16 @@ export default function EquipmentScreen({ navigation }) {
         }
       />
 
-      {cranes.length > 0 && (
-        <TouchableOpacity 
-          style={styles.fab} 
-          onPress={() => {
-            setCurrentEquipment(null);
-            navigation.navigate('AddEquipment')
-          }}
-        >
-          <Ionicons name="add" size={moderateScale(32)} color="#FFF" />
-        </TouchableOpacity>
-      )}
+      {/* Logic Updated: Removed cranes.length check so FAB is always visible above tabs */}
+      <TouchableOpacity 
+        style={styles.fab} 
+        onPress={() => {
+          setCurrentEquipment(null);
+          navigation.navigate('AddEquipment')
+        }}
+      >
+        <Ionicons name="add" size={moderateScale(32)} color="#FFF" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -155,7 +155,8 @@ const styles = StyleSheet.create({
   listContent: { 
     flexGrow: 1,
     padding: moderateScale(20),
-    paddingBottom: moderateScale(120) 
+    // Extra padding at bottom to ensure list items aren't hidden by the FAB
+    paddingBottom: moderateScale(150) 
   },
   equipmentCard: {
     backgroundColor: '#FFF',
@@ -235,7 +236,8 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: moderateScale(30), 
+    // Increased bottom value to clear the Navigation Tab Bar
+    bottom: moderateScale(100), 
     right: moderateScale(25),
     width: moderateScale(65),
     height: moderateScale(65),
@@ -248,5 +250,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 4.65,
+    zIndex: 999,
   },
 });
