@@ -16,6 +16,9 @@ export const PATHS = {
   customer: (companyId, customerId) => 
     `${ROOT(companyId)}/customers/${customerId}`,
 
+  custProfile: (companyId, customerId) =>
+    `${ROOT(companyId)}/customers/${customerId}/assets/custProfile`,
+
   cranes: (companyId, customerId) => 
     `${ROOT(companyId)}/customers/${customerId}/assets/custProfile/cranes`,
 
@@ -25,4 +28,13 @@ export const PATHS = {
   // --- SUB-COLLECTIONS ---
   serviceLogs: (companyId, customerId, unitId) => 
     `${ROOT(companyId)}/customers/${customerId}/assets/custProfile/cranes/${unitId}/serviceLogs`,
+  
+  activeIssues: (companyId, customerId, unitId) =>
+    `${ROOT(companyId)}/customers/${customerId}/assets/custProfile/cranes/${unitId}/activeIssues`,
+
+  livePulse: (companyId, customerId) =>
+    `${ROOT(companyId)}/customers/${customerId}/status/livePulse`,
+
+  inspectionsPending: (companyId, customerId) =>
+    `${ROOT(companyId)}/customers/${customerId}/inspectionsPending`,
 };

@@ -4,12 +4,13 @@ import {
   ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform 
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons'; 
 import { auth, db } from "../lib/firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { doc, writeBatch } from 'firebase/firestore';
 import { moderateScale } from '../utils/metrics';
 import { COLORS } from '../theme';
-import { PATHS } from '../utils/Paths'; // Centralized paths utility
+import { PATHS } from '../utils/Paths';
 
 export default function CompanyRegistration({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -27,6 +28,13 @@ export default function CompanyRegistration({ navigation }) {
   
   // Extra Admins State
   const [extraAdmins, setExtraAdmins] = useState([]); 
+
+  const handleBackToLogin = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Login' }],
+    });
+  };
 
   const addAdminField = () => {
     if (extraAdmins.length < 2) {
@@ -80,7 +88,6 @@ export default function CompanyRegistration({ navigation }) {
         const userCred = await createUserWithEmailAndPassword(auth, admin.email.trim().toLowerCase(), admin.password);
         const uid = userCred.user.uid;
 
-        // UPDATED: Using PATHS utility for nested user path
         const userRef = doc(db, PATHS.user(companyCode, uid));
         batch.set(userRef, {
           uid: uid,
@@ -89,18 +96,17 @@ export default function CompanyRegistration({ navigation }) {
           role: 'admin',
           privilege: admin.priv,
           companyId: companyCode,
-          userPhoto: "default"
+          userPhoto: "default",
+          createdAt: new Date().toISOString()
         });
       }
 
-      // Generate initial tokens
       const initialTokens = {};
       for (let i = 1; i <= 6; i++) {
         const tKey = `SK-${Math.random().toString(36).substring(2, 7).toUpperCase()}`; 
         initialTokens[tKey] = { status: 'available', usedBy: null, createdAt: new Date().toISOString() };
       }
 
-      // UPDATED: Using PATHS utility for company root path
       const companyRef = doc(db, PATHS.company(companyCode));
       batch.set(companyRef, {
         companyName,
@@ -121,6 +127,15 @@ export default function CompanyRegistration({ navigation }) {
     }
   };
 
+  const EmailDisclaimer = () => (
+    <View style={styles.infoBox}>
+      <Ionicons name="information-circle-outline" size={16} color="#004A99" />
+      <Text style={styles.infoText}>
+        This email will be used for professional reports. We recommend a workplace address.
+      </Text>
+    </View>
+  );
+
   if (success) {
     return (
       <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
@@ -129,7 +144,7 @@ export default function CompanyRegistration({ navigation }) {
           <Text style={styles.successText}>Access Code:</Text>
           <View style={styles.codeBox}><Text style={styles.codeDisplay}>{generatedCode}</Text></View>
           <Text style={styles.warningText}>Keep this code private. Techs need it to join.</Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Login' }] })}>
+          <TouchableOpacity style={styles.primaryBtn} onPress={handleBackToLogin}>
             <Text style={styles.btnText}> BACK TO LOGIN </Text>
           </TouchableOpacity>
         </View>
@@ -140,7 +155,15 @@ export default function CompanyRegistration({ navigation }) {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
       <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
-        <Text style={styles.title}>Register Company</Text>
+        
+        {/* Header with Back Button */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={handleBackToLogin} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={26} color={COLORS.primary} />
+          </TouchableOpacity>
+          <Text style={styles.title}>Register Company</Text>
+          <View style={{ width: 26 }} /> 
+        </View>
         
         <View style={styles.card}>
           <Text style={styles.sectionLabel}>Organization Details</Text>
@@ -149,8 +172,11 @@ export default function CompanyRegistration({ navigation }) {
 
           <Text style={styles.sectionLabel}>Primary Admin</Text>
           <TextInput style={styles.input} placeholder="Full Name" value={adminName} onChangeText={setAdminName} />
-          <TextInput style={styles.input} placeholder="Email" keyboardType="email-address" autoCapitalize="none" value={adminEmail} onChangeText={setAdminEmail} />
-          <TextInput style={styles.input} placeholder="Password" secureTextEntry value={adminPassword} onChangeText={setAdminPassword} />
+          <TextInput style={styles.input} placeholder="Work Email" keyboardType="email-address" autoCapitalize="none" value={adminEmail} onChangeText={setAdminEmail} />
+          
+          <EmailDisclaimer />
+
+          <TextInput style={[styles.input, { marginTop: moderateScale(10) }]} placeholder="Password" secureTextEntry value={adminPassword} onChangeText={setAdminPassword} />
           <TextInput style={styles.input} placeholder="Confirm Password" secureTextEntry value={adminConfirmPassword} onChangeText={setAdminConfirmPassword} />
 
           {extraAdmins.map((admin, index) => (
@@ -162,8 +188,11 @@ export default function CompanyRegistration({ navigation }) {
                 </TouchableOpacity>
               </View>
               <TextInput style={styles.input} placeholder="Full Name" value={admin.name} onChangeText={(v) => updateExtraAdmin(index, 'name', v)} />
-              <TextInput style={styles.input} placeholder="Email" keyboardType="email-address" autoCapitalize="none" value={admin.email} onChangeText={(v) => updateExtraAdmin(index, 'email', v)} />
-              <TextInput style={styles.input} placeholder="Password" secureTextEntry value={admin.password} onChangeText={(v) => updateExtraAdmin(index, 'password', v)} />
+              <TextInput style={styles.input} placeholder="Work Email" keyboardType="email-address" autoCapitalize="none" value={admin.email} onChangeText={(v) => updateExtraAdmin(index, 'email', v)} />
+              
+              <EmailDisclaimer />
+
+              <TextInput style={[styles.input, { marginTop: moderateScale(10) }]} placeholder="Password" secureTextEntry value={admin.password} onChangeText={(v) => updateExtraAdmin(index, 'password', v)} />
               <TextInput style={styles.input} placeholder="Confirm Password" secureTextEntry value={admin.confirmPassword} onChangeText={(v) => updateExtraAdmin(index, 'confirmPassword', v)} />
             </View>
           ))}
@@ -186,7 +215,20 @@ export default function CompanyRegistration({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scroll: { padding: moderateScale(20) },
-  title: { fontSize: moderateScale(26), fontWeight: 'bold', color: COLORS.primary, textAlign: 'center', marginBottom: moderateScale(25) },
+  headerRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    marginBottom: moderateScale(25) 
+  },
+  backBtn: { padding: moderateScale(5) },
+  title: { 
+    fontSize: moderateScale(24), 
+    fontWeight: 'bold', 
+    color: COLORS.primary, 
+    textAlign: 'center', 
+    flex: 1 
+  },
   card: { backgroundColor: '#FFF', padding: moderateScale(20), borderRadius: moderateScale(16), elevation: 4 },
   input: { 
     height: moderateScale(50), 
@@ -207,6 +249,21 @@ const styles = StyleSheet.create({
     marginBottom: moderateScale(8), 
     textTransform: 'uppercase',
     letterSpacing: 1
+  },
+  infoBox: {
+    flexDirection: 'row',
+    backgroundColor: '#EBF5FF',
+    padding: moderateScale(10),
+    borderRadius: moderateScale(8),
+    marginBottom: moderateScale(5),
+    alignItems: 'center',
+  },
+  infoText: {
+    fontSize: moderateScale(10),
+    color: '#004A99',
+    marginLeft: moderateScale(8),
+    flex: 1,
+    lineHeight: moderateScale(14)
   },
   extraAdminWrapper: { marginTop: 15, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
   adminHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

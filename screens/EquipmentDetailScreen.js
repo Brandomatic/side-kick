@@ -5,17 +5,17 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { UserContext } from '../components/MyContexts';
+import { PATHS } from '../utils/Paths';
 import { db } from '../lib/firebase';
 import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 import { moderateScale } from '../utils/metrics';
 import { COLORS } from '../theme';
 import { getStatusColor } from '../utils/MyHelperFunctions';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// --- REUSABLE COMPONENTS ---
 const SpecRow = ({ label, value }) => {
-  if (!value || value === 'N/A') return null;
+  // Only hide if the value is truly null, undefined, or an empty string
+  if (value === undefined || value === null || value === '') return null;
+  
   return (
     <View style={styles.row}>
       <Text style={styles.label}>{label}</Text>
@@ -53,7 +53,7 @@ const HistoryCard = ({ log, onPress }) => (
 );
 
 export default function EquipmentDetailScreen({ navigation }) {
-  const { currentEquipment, currentCustomer } = useContext(UserContext);
+  const { currentEquipment, currentCustomer, user } = useContext(UserContext);
   
   // Data States
   const [logs, setLogs] = useState([]);
@@ -67,17 +67,15 @@ export default function EquipmentDetailScreen({ navigation }) {
 
   useEffect(() => {
     if (!currentCustomer?.path || !currentEquipment?.unitId) return;
-
-    const basePath = `${currentCustomer.path}/cranes/${currentEquipment.unitId}`;
     
     // 1. Live Pulse (Active issues)
-    const pulseUnsub = onSnapshot(collection(db, `${basePath}/activeIssues`), (snap) => {
+    const pulseUnsub = onSnapshot(collection(db, PATHS.activeIssues(user.companyId, currentCustomer.id, currentEquipment.unitId)), (snap) => {
       setActivePulse(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
     // 2. Recent Service Logs (Limit 5)
     const recentLogsQuery = query(
-      collection(db, `${basePath}/serviceLogs`), 
+      collection(db, PATHS.serviceLogs(user.companyId, currentCustomer.id, currentEquipment.unitId)), 
       orderBy('date', 'desc'), 
       limit(5)
     );
@@ -87,7 +85,7 @@ export default function EquipmentDetailScreen({ navigation }) {
     });
 
     // 3. Full Logs (For Modal)
-    const fullLogsQuery = query(collection(db, `${basePath}/serviceLogs`), orderBy('date', 'desc'));
+    const fullLogsQuery = query(collection(db, PATHS.serviceLogs(user.companyId, currentCustomer.id, currentEquipment.unitId)), orderBy('date', 'desc'));
     const fullUnsub = onSnapshot(fullLogsQuery, (snap) => {
       setFullLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
@@ -170,6 +168,7 @@ export default function EquipmentDetailScreen({ navigation }) {
           <SpecRow label="Official Capacity" value={e.officialCapacity ? `${e.officialCapacity} Tons` : 'N/A'} />
           <SpecRow label="Manufacturer" value={e.equipMfg} />
           <SpecRow label="Hoist Type" value={e.hoistType} />
+          <SpecRow label="Unit Type" value={e.equipType} />
 
           {/* Sub-Sections */}
           {(e.bridgeSpecs?.mfg || e.bridgeSpecs?.sn) && (
@@ -192,11 +191,13 @@ export default function EquipmentDetailScreen({ navigation }) {
             </View>
           )}
 
-          {(e.trolleySpecs?.mfg || e.trolleySpecs?.cap) && (
+          {e.trolleySpecs && Object.keys(e.trolleySpecs).length > 0 && (
             <View style={styles.specSubSection}>
               <Text style={styles.miniHeader}>TROLLEY</Text>
-              <SpecRow label="Mfg" value={e.trolleySpecs?.mfg} />
-              <SpecRow label="Capacity" value={e.trolleySpecs?.cap} />
+              <SpecRow label="Mfg" value={e.trolleySpecs.mfg || "N/A"} />
+              <SpecRow label="Serial" value={e.trolleySpecs.sn || "N/A"} />
+              <SpecRow label="Model" value={e.trolleySpecs.mod || "N/A"} />
+              <SpecRow label="Capacity" value={e.trolleySpecs.cap ? `${e.trolleySpecs.cap} Ton` : "N/A"} />
             </View>
           )}
         </View>

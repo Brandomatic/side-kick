@@ -115,10 +115,10 @@ export default function App() {
                 />
                 
                 {/* GLOBAL APP SCREENS */}
-                <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: true, title: 'My Account' }} />
+                <Stack.Screen name="Profile" component={ProfileScreen} options={{ headerShown: true, title: 'My Account', headerBackTitle: 'Back' }} />
                 <Stack.Screen name="EquipmentDetail" component={EquipmentDetailScreen} options={{ headerShown: true, headerBackTitle: 'Back' }} />
                 <Stack.Screen name="QRScanner" component={QRScannerScreen} options={{ presentation: 'fullScreenModal' }} />
-                <Stack.Screen name="InspectionForm" component={InspectionFormScreen} options={{ headerShown: true, title: 'Live Inspection' }} />
+                <Stack.Screen name="InspectionForm" component={InspectionFormScreen} options={{ headerBackTitle: 'Back' }} />
                 <Stack.Screen name="AddEquipment" component={AddEquipmentScreen} options={{ headerShown: true, title: 'Add Asset', headerBackTitle: 'Back' }} />
                 <Stack.Screen name="MonitorList" component={MonitorWatchlistScreen} options={{ headerShown: true, title: 'Monitor List' }} />
               </Stack.Group>

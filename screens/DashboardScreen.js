@@ -2,6 +2,7 @@ import React, { useContext, useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { writeBatch, arrayUnion, doc, collection, onSnapshot } from 'firebase/firestore';
 import { UserContext } from '../components/MyContexts';
+import { PATHS } from '../utils/Paths';
 import { db } from '../lib/firebase';
 import { ResolutionModal } from '../components/modals/MyModals';
 import { getStatusColor } from '../utils/MyHelperFunctions';
@@ -24,7 +25,7 @@ export default function DashboardScreen({ navigation }) {
 
     // A) Listen to the LIVE PULSE
     // Path: companies/{code}/customers/{id}/status/livePulse
-    const pulseRef = doc(db, currentCustomer.path, "status", "livePulse");
+    const pulseRef = doc(db, PATHS.livePulse(user.companyId, currentCustomer.id));
     const unsubPulse = onSnapshot(pulseRef, (snap) => {
       if (snap.exists()) {
         setPulseData(snap.data());

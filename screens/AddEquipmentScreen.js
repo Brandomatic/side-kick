@@ -79,6 +79,16 @@ export default function AddEquipmentScreen({ navigation }) {
   const updateSpec = (field, value) => setSpecs(prev => ({ ...prev, [field]: value }));
   const toggleSection = (section) => setSections(prev => ({ ...prev, [section]: !prev[section] }));
 
+  // update numCranes in customer profile (increment by 1)
+  const updateCustCraneProfile = async () => {
+    if (!currentCustomer || !user) return;
+
+    const customerRef = doc(db, PATHS.custProfile(user.companyId, currentCustomer.id));
+    await updateDoc(customerRef, {
+      numCranes: increment(1)
+    });
+  };
+
   const handleCreateAsset = async () => {
     Keyboard.dismiss();
     if (!unitId.trim() || !serialNum.trim() || !officialCapacity.trim()) {
@@ -109,7 +119,7 @@ export default function AddEquipmentScreen({ navigation }) {
 
       const cranePath = PATHS.crane(user.companyId, currentCustomer.id, craneIdSlug);
       await setDoc(doc(db, cranePath), newCraneData);
-
+      updateCustCraneProfile();
       Alert.alert("Success", `${unitId} registered successfully.`);
       navigation.goBack();
       
