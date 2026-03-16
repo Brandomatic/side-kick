@@ -24,10 +24,13 @@ import {
   CustomerReportModal, 
   LaborModal, 
   FinalReviewModal,
+  ResolutionModal
 } from '../components/modals/MyModals';
 import { auth, db } from "../lib/firebase";
-// Add writeBatch to your firestore imports
-import { doc, collection, setDoc, arrayUnion, writeBatch } from 'firebase/firestore';
+import { 
+  doc, collection, setDoc, arrayUnion, writeBatch, 
+  onSnapshot, query, orderBy, deleteDoc, getDoc
+} from 'firebase/firestore';
 
 export default function InspectionFormScreen({ navigation }) {
   const { currentEquipment, user, currentCustomer } = useContext(UserContext);
@@ -47,9 +50,11 @@ export default function InspectionFormScreen({ navigation }) {
   const [finalReportNotes, setFinalReportNotes] = useState({}); // Stores the "polished" descriptions
   const [logisticsModalVisible, setLogisticsModalVisible] = useState(false);
   const [finalReviewVisible, setFinalReviewVisible] = useState(false);
-  const [inspectionType, setInspectionType] = useState('Monthly'); // Default
-  const [cranes, setCranes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [inspectionType, setInspectionType] = useState('Monthly');
+  const [activePulse, setActivePulse] = useState([]);
+  const [repairModalVisible, setRepairModalVisible] = useState(false);
+  const [itemToRepair, setItemToRepair] = useState(null);
+  const [resolvedDuringInspection, setResolvedDuringInspection] = useState([]);
 
   const inspectionTypes = [
     'Monthly', 
@@ -85,28 +90,65 @@ export default function InspectionFormScreen({ navigation }) {
     }
   }, [currentEquipment]);
 
+  useEffect(() => {
+  if (!currentCustomer?.id || !currentEquipment?.unitId) return;
+
+  // Listen to the live issues already on this crane
+  const pulseUnsub = onSnapshot(
+    collection(db, PATHS.activeIssues(user.companyId, currentCustomer.id, currentEquipment.unitId)), 
+    (snap) => {
+      const issues = snap.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(), 
+        isPriorIssue: true // Flag to distinguish from new findings
+      }));
+      setActivePulse(issues);
+    }
+  );
+
+  return () => pulseUnsub();
+}, [currentEquipment?.unitId]);
+
   const handleFinalSubmit = async () => {
-    setIsSubmitting(true);
-    const companyId = user?.companyId;
+  setIsSubmitting(true);
+  const companyId = user?.companyId;
+
+  // Immediately close modal to prevent the "Double Card" UI flicker
+    setFinalReviewVisible(false);
 
     if (!companyId || !currentCustomer?.id || !currentEquipment?.id) {
       Alert.alert("Error", "Missing required IDs for submission.");
       setIsSubmitting(false);
+      setFinalReviewVisible(true);
       return;
     }
 
     try {
       const batch = writeBatch(db); 
-      const reportId = doc(collection(db, "temp")).id;
       const timestamp = new Date().toISOString();
+      const reportId = doc(collection(db, "temp")).id;
 
-      // --- PATHS INTEGRATION ---
       const cranePath = PATHS.crane(companyId, currentCustomer.id, currentEquipment.id);
       const logPath = PATHS.serviceLogs(companyId, currentCustomer.id, currentEquipment.id);
       const pulsePath = PATHS.livePulse(companyId, currentCustomer.id);
       const pendingPath = PATHS.inspectionsPending(companyId, currentCustomer.id);
 
-      // --- DATA CLEANING ---
+      // --- 1. FETCH CURRENT GLOBAL PULSE FOR CLEANING ---
+      const pulseRef = doc(db, pulsePath);
+      const pulseSnap = await getDoc(pulseRef);
+      let activeIssuesArray = [];
+      if (pulseSnap.exists()) {
+        activeIssuesArray = pulseSnap.data().activeIssues || [];
+      }
+
+      const resolvedIds = resolvedDuringInspection.map(r => r.issueId || r.id);
+      const updatedIds = pendingItems.map(p => p.issueId).filter(id => id != null);
+
+      const filteredPulse = activeIssuesArray.filter(
+        issue => !resolvedIds.includes(issue.issueId) && !updatedIds.includes(issue.issueId)
+      );
+
+      // --- 2. DATA CLEANING & FINDINGS MAPPING ---
       const cleanedChecklist = checklist.map(section => ({
         ...section,
         items: section.items.map(item => ({
@@ -118,7 +160,28 @@ export default function InspectionFormScreen({ navigation }) {
         }))
       }));
 
-      // --- PACKAGE ONE: The Legal Archive (Pending WO) ---
+      // Prepare Finding Objects (Mapping specific customer notes from Phase 3)
+      const findingsForBatch = pendingItems.map(item => {
+        const finalIssueId = item.issueId || doc(collection(db, "temp")).id; 
+        
+        return {
+          issueId: finalIssueId,
+          unitId: currentEquipment?.unitId || "Unknown Unit",
+          equipmentId: currentEquipment?.id || "Unknown ID",
+          inspector: user?.userDisplayName || "Unknown Inspector",
+          type: item.status?.toUpperCase() || "REPAIR", 
+          compDesc: `${item.sectionName || 'Section'} : ${item.label || 'Component'}`,
+          sectionName: item.sectionName,
+          label: item.label,
+          status: item.status.toUpperCase(),
+          // Matches the TextInput keys in your CustomerReportModal (Modal 3)
+          techNotes: finalReportNotes[item.id] || item.notes || "",
+          date: timestamp,
+          reportId: reportId
+        };
+      });
+
+      // --- 3. PACKAGE ONE: The Legal Archive ---
       const archiveRef = doc(db, pendingPath, reportId);
       batch.set(archiveRef, {
         reportId,
@@ -129,75 +192,76 @@ export default function InspectionFormScreen({ navigation }) {
         date: timestamp,
         fullChecklist: cleanedChecklist, 
         techLogs: techLogs || [],
-        status: "AWAITING_WO_PO"
+        status: "AWAITING_WO_PO",
+        // Include the executive summary in the archive
+        globalSummary: finalReportNotes["GLOBAL_SUMMARY"] 
       });
 
-      // --- PACKAGE TWO: Global Live Pulse ---
-      const currentFindings = pendingItems.map(item => ({
-        issueId: doc(collection(db, "temp")).id,
-        unitId: currentEquipment?.unitId || "Unknown Unit",
-        equipmentId: currentEquipment?.id || "Unknown ID",
-        inspector: user?.userDisplayName || "Unknown Inspector",
-        type: item.status?.toUpperCase() || "REPAIR", 
-        compDesc: `${item.sectionName || 'Section'} : ${item.label || 'Component'}`,
-        techNotes: item.notes || "",
-        date: timestamp
-      }));
-
-      const pulseRef = doc(db, pulsePath);
+      // --- 4. PACKAGE TWO: Global Live Pulse ---
       batch.set(pulseRef, {
         lastUpdate: timestamp,
-        activeIssues: arrayUnion(...currentFindings),
-        recentEvents: arrayUnion({
-          type: 'INSPECTION',
-          unitId: currentEquipment.unitId,
-          summary: `${inspectionType} Completed`,
-          date: timestamp
-        })
+        activeIssues: [...filteredPulse, ...findingsForBatch], 
+        recentEvents: arrayUnion(
+          {
+            type: 'INSPECTION',
+            unitId: currentEquipment.unitId,
+            summary: `${inspectionType} Completed`,
+            date: timestamp
+          },
+          ...resolvedDuringInspection.map(item => ({
+            type: 'REPAIR',
+            unitId: currentEquipment.unitId,
+            summary: `FIXED: ${item.label}`,
+            date: timestamp
+          }))
+        )
       }, { merge: true });
 
-      // --- PACKAGE THREE: The Service Log (History Entry) ---
-      const repairCount = pendingItems.filter(item => item.status?.toUpperCase() === 'REPAIR').length;
-      const attentionCount = pendingItems.filter(item => item.status?.toUpperCase() === 'ATTENTION').length;
-      const monitorCount = pendingItems.filter(item => item.isMonitor).length;
-      const topSeverity = repairCount > 0 ? 'HIGH' : (attentionCount > 0 ? 'MEDIUM' : 'OK');
-
-      const serviceLogRef = doc(collection(db, logPath));
-      batch.set(serviceLogRef, {
+      // --- 5. PACKAGE THREE: Service Log (History Cards) ---
+      const mainLogRef = doc(collection(db, logPath));
+      batch.set(mainLogRef, {
         date: timestamp,
         inspectionType,
         inspector: user.userDisplayName,
-        summary: pendingItems.length === 0 ? "No faults found" : `${pendingItems.length} issues found`,
+        // Pulls the Editable Summary from Phase 3
+        summary: finalReportNotes["GLOBAL_SUMMARY"], 
         findings: pendingItems.map(item => `${item.sectionName} : ${item.label}`),
         reportId,
-        repairCount,
-        attentionCount,
-        monitorCount,
-        topSeverity,
+        topSeverity: pendingItems.some(i => i.status.toUpperCase() === 'REPAIR') ? 'HIGH' : 'OK',
         hasIssues: pendingItems.length > 0
       });
 
-      // --- PACKAGE FOUR: The Asset Pulse (Active Issues List) ---
-      pendingItems.forEach(item => {
-        const issueId = `${item.sectionName}-${item.label}`.replace(/\s+/g, '');
-        const activeIssueRef = doc(db, cranePath, "activeIssues", issueId);
-
-        batch.set(activeIssueRef, {
-          sectionName: item.sectionName,
-          label: item.label,
-          status: item.status.toUpperCase(),
-          notes: item.notes || "",
+      resolvedDuringInspection.forEach(item => {
+        const resLogRef = doc(collection(db, logPath));
+        batch.set(resLogRef, {
           date: timestamp,
+          logType: "REPAIR_RESOLVED",
+          inspectionType: "Repair Resolution", 
+          summary: `Fixed during ${inspectionType}`,
           inspector: user.userDisplayName,
-          reportId: reportId
-        }, { merge: true });
+          compDesc: `${item.sectionName} : ${item.label}`,
+          resolvedDetails: item.resolvedNotes,
+          initialDiagnosisDetails: item.notes || "Prior issue resolved",
+          unitId: currentEquipment.unitId,
+          topSeverity: 'OK'
+        });
+      });
+
+      // --- 6. PACKAGE FOUR: Individual Asset Updates ---
+      findingsForBatch.forEach(obj => {
+        const activeIssueRef = doc(db, cranePath, "activeIssues", obj.issueId);
+        batch.set(activeIssueRef, obj, { merge: true });
+      });
+
+      resolvedIds.forEach(id => {
+        const issueRef = doc(db, cranePath, "activeIssues", id);
+        batch.delete(issueRef);
       });
 
       await batch.commit();
 
       Alert.alert("Success", "Inspection Submitted.", [
         { text: "OK", onPress: () => {
-          setFinalReviewVisible(false); 
           setTimeout(() => { navigation.popToTop(); }, 100);
         }}
       ]);
@@ -205,6 +269,7 @@ export default function InspectionFormScreen({ navigation }) {
     } catch (err) {
       console.error("SUBMIT ERROR: ", err);
       Alert.alert("Error", "Could not submit inspection.");
+      setFinalReviewVisible(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -212,20 +277,22 @@ export default function InspectionFormScreen({ navigation }) {
 
   // --- LOGIC: PENDING CALLS (Summary at top) ---
   const pendingItems = useMemo(() => {
-    const pending = [];
-    checklist.forEach(section => {
-      section.items.forEach(item => {
-        // Capture anything flagged as Repair, Attention, or Monitoring
-        if (item.status === 'REPAIR' || item.status === 'ATTENTION' || item.isMonitor === true) {
-          pending.push({ 
-            ...item, 
-            sectionName: section.section // This feeds the "Hoist : Brake" label
-          });
-        }
-      });
+  const currentFindings = [];
+  checklist.forEach(section => {
+    section.items.forEach(item => {
+      if (item.status === 'REPAIR' || item.status === 'ATTENTION' || item.isMonitor === true) {
+        currentFindings.push({ ...item, sectionName: section.section, isNewFinding: true });
+      }
     });
-    return pending;
-  }, [checklist]);
+  });
+
+  // Filter out any prior issues that were resolved during this session
+  const activePrior = activePulse.filter(ap => 
+    !resolvedDuringInspection.find(r => r.id === ap.id)
+  );
+
+  return [...activePrior, ...currentFindings];
+}, [checklist, activePulse, resolvedDuringInspection]);
 
   if (!currentEquipment) return null;
 
@@ -402,13 +469,30 @@ export default function InspectionFormScreen({ navigation }) {
     }, 1000);
   };
 
+  const handleInspectionRepair = (item, repairNotes) => {
+  const resolutionEntry = {
+    ...item,
+    resolvedNotes: repairNotes,
+    resolvedAt: new Date().toISOString(),
+    logType: "REPAIR_RESOLVED"
+  };
+
+  setResolvedDuringInspection(prev => [...prev, resolutionEntry]);
+  setRepairModalVisible(false);
+  
+  // If it was a new finding in the checklist, reset that checklist item to OK
+    if (item.isNewFinding) {
+      // Logic to find sIdx and iIdx and set to 'OK'
+    }
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* HEADER: Fixes the blank spot by moving notch padding here */}
       <View style={styles.appHeader}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={moderateScale(24)} color="#333" />
-        </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={moderateScale(24)} color="#333" />
+          </TouchableOpacity>
         <Text style={styles.headerTitle}>{currentEquipment.unitId} Inspection</Text>
         <TouchableOpacity onPress={() => setHelpModalVisible(true)}>
           <Ionicons name="help-circle-outline" size={moderateScale(22)} color="#666" />
@@ -441,16 +525,28 @@ export default function InspectionFormScreen({ navigation }) {
                 <View key={`pending-${index}`} style={styles.pendingItem}>
                   <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.status) }]} />
                   <View style={{flex: 1}}>
-                    <Text style={styles.pendingLabel}>{item.sectionName} {item.label}</Text>
+                    <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                      <Text style={styles.pendingLabel}>{item.sectionName} {item.label}</Text>
+                      {item.isPriorIssue && (
+                        <View style={styles.priorIssueBadge}>
+                          <Text style={styles.priorIssueText}>PRIOR ISSUE</Text>
+                        </View>
+                      )}
+                    </View>
                     {item.notes && <Text style={styles.pendingNote} numberOfLines={2}>{item.notes}</Text>}
                   </View>
-                  {item.isMonitor && (
-                    <View style={styles.monitorBadge}>
-                      <Ionicons name="eye" size={10} color="#FFF" />
-                      <Text style={styles.monitorBadgeText}>MONITOR</Text>
-                    </View>
-                  )}
-                  <Text style={[styles.pendingStatusText, { color: getStatusColor(item.status) }]}>{item.status}</Text>
+
+                  {/* REPAIR BUTTON (Opposite the Mic logic conceptually) */}
+                  <TouchableOpacity 
+                    style={styles.repairSmallBtn}
+                    onPress={() => {
+                      setItemToRepair(item);
+                      setRepairModalVisible(true);
+                    }}
+                  >
+                    <Ionicons name="construct" size={14} color="#FFF" />
+                    <Text style={styles.repairSmallText}>Repair</Text>
+                  </TouchableOpacity>
                 </View>
               ))}
             </ScrollView>
@@ -561,17 +657,37 @@ export default function InspectionFormScreen({ navigation }) {
       </ScrollView>
 
       {/* FOOTER ACTION BUTTON */}
-      {pendingItems.length > 0 && (
-        <View style={styles.footerContainer}>
-          <TouchableOpacity 
-            style={styles.reviewBtn} 
-            onPress={() => setReviewModalVisible(true)}
-          >
-            <Text style={styles.reviewBtnText}>REVIEW {pendingItems.length} FINDINGS</Text>
-            <Ionicons name="arrow-forward" size={moderateScale(18)} color="#FFF" />
-          </TouchableOpacity>
-        </View>
-      )}
+      <View style={styles.footerContainer}>
+        <TouchableOpacity 
+          style={[
+            styles.reviewBtn, 
+            pendingItems.length === 0 && { backgroundColor: COLORS.primary } // Optional: different color for "Clean"
+          ]} 
+          onPress={() => {
+            if (pendingItems.length > 0) {
+              setReviewModalVisible(true);
+            } else {
+              // Perfect Crane Logic: 
+              // We set a global summary since there are no specific item IDs to attach notes to
+              const cleanNote = `${inspectionType} inspection completed. No faults found.`;
+              setFinalReportNotes({ GLOBAL_SUMMARY: cleanNote }); 
+              setReportModalVisible(true);
+            }
+          }}
+        >
+          <Text style={styles.reviewBtnText}>
+            {pendingItems.length > 0 
+              ? `REVIEW ${pendingItems.length} FINDINGS` 
+              : "NEXT: CUSTOMER REPORT"}
+          </Text>
+          <Ionicons 
+            name={pendingItems.length > 0 ? "list" : "checkmark-circle"} 
+            size={moderateScale(18)} 
+            color="#FFF" 
+            style={{ marginLeft: moderateScale(8) }}
+          />
+        </TouchableOpacity>
+      </View>
 
       {/* MIC & MODALS */}
       <TouchableOpacity style={[styles.micBtn, isListening && styles.micBtnActive]} onPress={startListeningSimulator}>
@@ -631,9 +747,21 @@ export default function InspectionFormScreen({ navigation }) {
         data={{
           techLogs: techLogs,
           pendingItems: pendingItems,
-          reportNotes: finalReportNotes
+          reportNotes: finalReportNotes,
+          resolvedDuringInspection: resolvedDuringInspection // <--- ADD THIS LINE
         }}
         onSubmit={handleFinalSubmit}
+      />
+
+      {/* RESOLUTION MODAL */}
+      <ResolutionModal 
+        visible={repairModalVisible}
+        item={itemToRepair}
+        onClose={() => {
+          setRepairModalVisible(false);
+          setItemToRepair(null);
+        }}
+        onResolve={handleInspectionRepair}
       />
     </View>
   );
@@ -954,4 +1082,33 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#444',
   },
+  priorIssueBadge: {
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: '#DDD'
+  },
+  priorIssueText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#666'
+  },
+  repairSmallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2E7D32',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 10
+  },
+  repairSmallText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '900',
+    marginLeft: 4
+  }
 });

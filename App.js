@@ -120,7 +120,7 @@ export default function App() {
                 <Stack.Screen name="QRScanner" component={QRScannerScreen} options={{ presentation: 'fullScreenModal' }} />
                 <Stack.Screen name="InspectionForm" component={InspectionFormScreen} options={{ headerBackTitle: 'Back' }} />
                 <Stack.Screen name="AddEquipment" component={AddEquipmentScreen} options={{ headerShown: true, title: 'Add Asset', headerBackTitle: 'Back' }} />
-                <Stack.Screen name="MonitorList" component={MonitorWatchlistScreen} options={{ headerShown: true, title: 'Monitor List' }} />
+                <Stack.Screen name="MonitorList" component={MonitorWatchlistScreen} options={{ headerShown: true, title: 'Monitor List', headerBackTitle: 'Back' }} />
               </Stack.Group>
             )}
           </Stack.Navigator>

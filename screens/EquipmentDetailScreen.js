@@ -24,36 +24,54 @@ const SpecRow = ({ label, value }) => {
   );
 };
 
-const HistoryCard = ({ log, onPress }) => (
-  <TouchableOpacity 
-    style={[styles.historyCard, { borderLeftColor: log.hasIssues ? '#EF4444' : '#10B981' }]}
-    onPress={onPress}
-  >
-    <View style={styles.cardHeader}>
-      <Text style={styles.logTitle}>{log.inspectionType} Insp. Completed</Text>
-      <Text style={styles.logDate}>{log.date ? new Date(log.date).toLocaleDateString() : 'Recent'}</Text>
-    </View>
+const HistoryCard = ({ log }) => {
+  // Determine color and title based on the type of work
+  const isRepair = log.logType === "Monitor Resolved" || log.logType === "Repair";
+  const statusColor = isRepair ? '#2E7D32' : (log.hasIssues ? '#EF4444' : '#10B981');
+  const title = log.logType === "Monitor Resolved" ? "Repair/Monitor Resolved" : `${log.inspectionType || 'Standard'} Inspection`;
 
-    <Text style={[styles.logSummary, { color: log.hasIssues ? '#B91C1C' : '#059669' }]}>
-      {log.summary}
-    </Text>
-
-    {log.findings && log.findings.length > 0 && (
-      <View style={styles.bulletContainer}>
-        {log.findings.map((finding, index) => (
-          <Text key={index} style={styles.bulletItem}>• {finding}</Text>
-        ))}
+  return (
+    <View style={[styles.historyCard, { borderLeftColor: statusColor }]}>
+      <View style={styles.cardHeader}>
+        <View style={{flexDirection: 'row', alignItems: 'center'}}>
+          <Ionicons 
+            name={isRepair ? "construct" : "clipboard"} 
+            size={14} 
+            color={statusColor} 
+            style={{marginRight: 6}} 
+          />
+          <Text style={styles.logTitle}>{title}</Text>
+        </View>
+        <Text style={styles.logDate}>
+          {log.date ? new Date(log.date).toLocaleDateString() : 'Recent'}
+        </Text>
       </View>
-    )}
 
-    <View style={styles.footnoteRow}>
-      <Text style={styles.techNote}>Technician: {log.inspector}</Text>
+      <Text style={[styles.logSummary, { color: statusColor }]}>
+        {log.logType === "Monitor Resolved" ? log.compDesc : log.summary}
+      </Text>
+
+      {/* Logic for showing resolution notes vs findings */}
+      {log.resolvedDetails ? (
+        <Text style={styles.bulletItem}>{log.resolvedDetails}</Text>
+      ) : (
+        log.findings?.length > 0 && (
+          <View style={styles.bulletContainer}>
+            {log.findings.map((f, i) => <Text key={i} style={styles.bulletItem}>• {f}</Text>)}
+          </View>
+        )
+      )}
+
+      <View style={styles.footnoteRow}>
+        <Text style={styles.techNote}>By: {log.inspector || log.resolvedByName}</Text>
+      </View>
     </View>
-  </TouchableOpacity>
-);
+  );
+};
 
 export default function EquipmentDetailScreen({ navigation }) {
   const { currentEquipment, currentCustomer, user } = useContext(UserContext);
+  const [isSpecsExpanded, setIsSpecsExpanded] = useState(false);
   
   // Data States
   const [logs, setLogs] = useState([]);
@@ -164,40 +182,58 @@ export default function EquipmentDetailScreen({ navigation }) {
 
         {/* Technical Specs Card */}
         <View style={styles.infoCard}>
-          <Text style={styles.sectionTitle}>Unit Specifications</Text>
+          <View style={styles.sectionHeaderRow}>
+            <Text style={styles.sectionTitle}>Unit Specifications</Text>
+            <TouchableOpacity 
+              onPress={() => setIsSpecsExpanded(!isSpecsExpanded)}
+              style={styles.expandBtn}
+            >
+              <Text style={styles.expandBtnText}>{isSpecsExpanded ? 'Hide Details' : 'View Details'}</Text>
+              <Ionicons 
+                name={isSpecsExpanded ? "chevron-up" : "chevron-down"} 
+                size={moderateScale(14)} 
+                color={COLORS.primary} 
+              />
+            </TouchableOpacity>
+          </View>
+
           <SpecRow label="Official Capacity" value={e.officialCapacity ? `${e.officialCapacity} Tons` : 'N/A'} />
           <SpecRow label="Manufacturer" value={e.equipMfg} />
           <SpecRow label="Hoist Type" value={e.hoistType} />
           <SpecRow label="Unit Type" value={e.equipType} />
 
-          {/* Sub-Sections */}
-          {(e.bridgeSpecs?.mfg || e.bridgeSpecs?.sn) && (
-            <View style={styles.specSubSection}>
-              <Text style={styles.miniHeader}>BRIDGE</Text>
-              <SpecRow label="Mfg" value={e.bridgeSpecs?.mfg} />
-              <SpecRow label="Serial" value={e.bridgeSpecs?.sn} />
-              <SpecRow label="Model" value={e.bridgeSpecs?.mod} />
-              <SpecRow label="Capacity" value={e.bridgeSpecs?.cap} />
-            </View>
-          )}
+          {/* COLLAPSIBLE SUB-SECTIONS */}
+          {isSpecsExpanded && (
+            <View style={styles.collapsibleContent}>
+              {(e.bridgeSpecs?.mfg || e.bridgeSpecs?.sn) && (
+                <View style={styles.specSubSection}>
+                  <Text style={styles.miniHeader}>BRIDGE</Text>
+                  <SpecRow label="Mfg" value={e.bridgeSpecs?.mfg} />
+                  <SpecRow label="Serial" value={e.bridgeSpecs?.sn} />
+                  <SpecRow label="Model" value={e.bridgeSpecs?.mod} />
+                  <SpecRow label="Capacity" value={e.bridgeSpecs?.cap} />
+                </View>
+              )}
 
-          {(e.hoistSpecs?.mfg || e.hoistSpecs?.sn) && (
-            <View style={styles.specSubSection}>
-              <Text style={styles.miniHeader}>HOIST</Text>
-              <SpecRow label="Mfg" value={e.hoistSpecs?.mfg} />
-              <SpecRow label="Serial" value={e.hoistSpecs?.sn} />
-              <SpecRow label="Model" value={e.hoistSpecs?.mod} />
-              <SpecRow label="Capacity" value={e.hoistSpecs?.cap} />
-            </View>
-          )}
+              {(e.hoistSpecs?.mfg || e.hoistSpecs?.sn) && (
+                <View style={styles.specSubSection}>
+                  <Text style={styles.miniHeader}>HOIST</Text>
+                  <SpecRow label="Mfg" value={e.hoistSpecs?.mfg} />
+                  <SpecRow label="Serial" value={e.hoistSpecs?.sn} />
+                  <SpecRow label="Model" value={e.hoistSpecs?.mod} />
+                  <SpecRow label="Capacity" value={e.hoistSpecs?.cap} />
+                </View>
+              )}
 
-          {e.trolleySpecs && Object.keys(e.trolleySpecs).length > 0 && (
-            <View style={styles.specSubSection}>
-              <Text style={styles.miniHeader}>TROLLEY</Text>
-              <SpecRow label="Mfg" value={e.trolleySpecs.mfg || "N/A"} />
-              <SpecRow label="Serial" value={e.trolleySpecs.sn || "N/A"} />
-              <SpecRow label="Model" value={e.trolleySpecs.mod || "N/A"} />
-              <SpecRow label="Capacity" value={e.trolleySpecs.cap ? `${e.trolleySpecs.cap} Ton` : "N/A"} />
+              {e.trolleySpecs && Object.keys(e.trolleySpecs).length > 0 && (
+                <View style={styles.specSubSection}>
+                  <Text style={styles.miniHeader}>TROLLEY</Text>
+                  <SpecRow label="Mfg" value={e.trolleySpecs.mfg || "N/A"} />
+                  <SpecRow label="Serial" value={e.trolleySpecs.sn || "N/A"} />
+                  <SpecRow label="Model" value={e.trolleySpecs.mod || "N/A"} />
+                  <SpecRow label="Capacity" value={e.trolleySpecs.cap ? `${e.trolleySpecs.cap} Ton` : "N/A"} />
+                </View>
+              )}
             </View>
           )}
         </View>
@@ -217,7 +253,14 @@ export default function EquipmentDetailScreen({ navigation }) {
             <ActivityIndicator color={COLORS.primary} />
           ) : logs.length > 0 ? (
             logs.map((log) => (
-              <HistoryCard key={log.id} log={log} onPress={() => handleViewReport(log.reportId)} />
+              <HistoryCard 
+                key={log.id} 
+                log={log} 
+                onPress={() => {
+                  // setSelectedReport(log);  Set the specific log for the modal
+                  // setHistoryReviewVisible(true);  Open the ServiceHistoryModal
+                }} 
+              />
             ))
           ) : (
             <Text style={styles.emptyText}>No inspection records found.</Text>
@@ -261,7 +304,7 @@ export default function EquipmentDetailScreen({ navigation }) {
                   <Ionicons name="alert-circle" size={18} color={getStatusColor(item.status)} />
                   <View style={{marginLeft: 10, flex: 1}}>
                     <Text style={styles.monitorComp}>{item.sectionName}: {item.label}</Text>
-                    <Text style={styles.monitorDetails}>{item.notes || 'No notes.'}</Text>
+                    <Text style={styles.monitorDetails}>{item.techNotes || item.notes || "No Notes"}</Text>
                   </View>
                 </View>
               ))}
@@ -324,4 +367,24 @@ const styles = StyleSheet.create({
   monitorDetails: { fontSize: 12, color: '#666' },
   closePopup: { backgroundColor: '#F3F4F6', padding: 12, borderRadius: 10, alignItems: 'center', marginTop: 10 },
   closePopupText: { fontWeight: 'bold', color: '#333' },
+  expandBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F4F8',
+    paddingHorizontal: moderateScale(10),
+    paddingVertical: moderateScale(4),
+    borderRadius: moderateScale(6),
+  },
+  expandBtnText: {
+    fontSize: moderateScale(11),
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginRight: moderateScale(4),
+  },
+  collapsibleContent: {
+    marginTop: moderateScale(5),
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    paddingTop: moderateScale(5),
+  },
 });
